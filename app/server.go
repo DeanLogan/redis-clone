@@ -2,11 +2,12 @@ package main
 
 import (
 	"bufio"
-	"errors"
+	_ "errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
-	_"strconv"
+	"strconv"
 	"strings"
 )
 
@@ -32,6 +33,7 @@ func main() {
 		go handleConnection(conn)
 	}
 }
+
 
 
 func handleConnection(conn net.Conn) {
@@ -60,24 +62,75 @@ func echoResponse(conn net.Conn, msg string) {
 
 }
 
-func responseParser(msg string) (string, error) {
-	response := ""
-	switch msg[0] {
-		case '+': // Simple string
-			response := msg[1:]
-			return response, nil
-		case '-': // Error
-			return "", errors.New(msg[1:])
-		case ':': // Integer
-			return response, nil
-		case '$': // Bulk string
-			response := msg[1:]
-			return response, nil
-		case '*': // Array
-			_, msg := splitAtStr(msg, "\r\n")
-			return responseParser(msg)
-		}
-	return response, nil
+type RespType int
+
+const (
+    SimpleString RespType = iota
+    ErrorResponse
+    Integer
+    BulkString
+    Array
+)
+
+type RespValue struct {
+    Type   RespType
+    String string
+    Int    int64
+    Array  []*RespValue
+}
+
+func parseRespValue(reader *bufio.Reader) (*RespValue, error) {
+    line, err := reader.ReadString('\n')
+    if err != nil {
+        return nil, err
+    }
+
+    prefix := line[0]
+    payload := line[1 : len(line)-2] // Trim \r\n
+
+    switch prefix {
+    case '+':
+        return &RespValue{Type: SimpleString, String: payload}, nil
+    case '-':
+        return &RespValue{Type: ErrorResponse, String: payload}, nil
+    case ':':
+        intValue, err := strconv.ParseInt(payload, 10, 64)
+        if err != nil {
+            return nil, err
+        }
+        return &RespValue{Type: Integer, Int: intValue}, nil
+    case '$':
+        length, err := strconv.Atoi(payload)
+        if err != nil {
+            return nil, err
+        }
+        if length == -1 {
+            return &RespValue{Type: BulkString, String: ""}, nil
+        }
+        data := make([]byte, length)
+        _, err = io.ReadFull(reader, data)
+        if err != nil {
+            return nil, err
+        }
+        // Discard \r\n
+        reader.Discard(2)
+        return &RespValue{Type: BulkString, String: string(data)}, nil
+    case '*':
+        numElements, err := strconv.Atoi(payload)
+        if err != nil {
+            return nil, err
+        }
+        array := make([]*RespValue, numElements)
+        for i := range array {
+            array[i], err = parseRespValue(reader)
+            if err != nil {
+                return nil, err
+            }
+        }
+        return &RespValue{Type: Array, Array: array}, nil
+    default:
+        return nil, fmt.Errorf("unknown RESP type: %c", prefix)
+    }
 }
 
 // splitAtStr splits a string at the first occurrence of a given string.
