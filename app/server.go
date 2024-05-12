@@ -1,13 +1,10 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"net"
 	"os"
-	"strings"
 )
-
 
 func main() {
 	l, err := net.Listen("tcp", "0.0.0.0:6379") // port 6379 is the default port for Redis
@@ -34,14 +31,41 @@ func main() {
 func handleConnection(conn net.Conn) {
     defer conn.Close()
 
-    scanner := bufio.NewScanner(conn)
-    for scanner.Scan() {
-        msg := scanner.Text()
-        if strings.TrimSpace(msg) == "PING" {
-            pingResponse(conn)
-        } else if msg[:4] == "ECHO" {
-			echoResponse(conn, msg)
-		} 
+    for {
+        buf := make([]byte, 1024)
+        textStart, err := conn.Read(buf)
+        if err != nil {
+            fmt.Println("Error reading:", err.Error())
+            return
+        }
+
+        msg := string(buf[:textStart])
+        respValue, err := parseRespValue(msg)
+        if err != nil{
+            fmt.Println("Error parsing resp value: ", err.Error())
+            return
+        }
+        if inputArr, ok := respValue.Value.([]*RespValue); ok {
+            if len(inputArr) == 0 {
+                fmt.Println("Error: empty array")
+                return
+            }
+            switch inputArr[0].Value {
+            case "PING":
+                fmt.Println("ping message")
+                pingResponse(conn)
+            case "ECHO":
+                fmt.Println("echo message")
+                if len(inputArr) != 2 {
+                    fmt.Println("Error: ECHO command requires 1 argument")
+                    return
+                }
+                echoResponse(conn, inputArr[1].Value.(string))
+            default:
+                fmt.Println("Error: unknown command")
+                return
+            }
+        }
     }
 }
 
@@ -54,5 +78,9 @@ func pingResponse(conn net.Conn) {
 }
 
 func echoResponse(conn net.Conn, msg string) {
-
+    _, err := conn.Write([]byte("$" + fmt.Sprint(len(msg)) + "\r\n" + msg + "\r\n"))
+	if err != nil {
+		fmt.Println("Error sending response: ", err.Error())
+		return
+	}
 }

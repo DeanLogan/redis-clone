@@ -70,7 +70,7 @@ func parseRespValue(msg string) (*RespValue, error) {
 func readLine(msg string) (string, error) {
 	idx := strings.Index(msg, "\r\n")
 	if idx == -1 {
-		return "", errors.New("invalid resp format")
+		return "", errors.New("invalid resp formatDD: "+msg)
 	}
 
 	return msg[:idx], nil
@@ -91,7 +91,7 @@ func readInt(msg string) (int, error) {
 func readBulkString(msg string) (string, error) {
 	idx := strings.Index(msg, "\r\n")
 	if idx == -1 {
-		return "", errors.New("invalid resp format")
+		return "", errors.New("invalid resp formatHH")
 	}
 	size,  err := strconv.Atoi(msg[:idx])
 	if err != nil {
@@ -102,17 +102,17 @@ func readBulkString(msg string) (string, error) {
 }
 
 func readArray(msg string) ([]*RespValue, error) {
-    sizeStr, err := readLine(msg)
-    if err != nil {
-        return nil, err
-    }
-    arrLen, err := strconv.Atoi(sizeStr)
-    if err != nil {
-        return nil, err
-    }
+	idx := strings.Index(msg, "\r\n")
+	if idx == -1 {
+		return nil, errors.New("invalid resp formatOO"+msg)
+	}
+	arrLen,  err := strconv.Atoi(msg[:idx])
+	if err != nil {
+		return nil, err
+	}
 
     arr := []*RespValue{}
-    msg = msg[len(sizeStr)+2:] // skip the first line
+    msg = msg[idx+2:] // skip the first line
     // break msg into individual elements
     msgs := []string{}
     //msg = strings.ReplaceAll(msg, "\r\n", "\\r\\n") // uncomment to see the actual msg in the console for debugging
@@ -136,7 +136,7 @@ func readArray(msg string) ([]*RespValue, error) {
         arr = append(arr, respValue)
     }
     if len(arr) != arrLen {
-        return nil, errors.New("invalid resp format")
+        return nil, errors.New("invalid resp formatFF")
     }
     return arr, nil
 }
@@ -182,13 +182,6 @@ func isRespType(val byte) bool {
     }
 }
 
-func reverseString(s string) (result string) {
-    for _,v := range s {
-        result = string(v) + result
-    }
-    return result 
-}
-
 func printRespValue(respValue *RespValue) {
     switch respValue.Type {
     case STRING, ERROR, NULL, BULK, BULK_ERROR, VERBATIM_STRING:
@@ -208,7 +201,6 @@ func printRespValue(respValue *RespValue) {
             for _, v := range value {
                 printRespValue(v)
             }
-            //fmt.Println("Array: ", value)
         }
     case BOOLEANS:
         if value, ok := respValue.Value.(bool); ok {
