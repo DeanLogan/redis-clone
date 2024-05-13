@@ -201,6 +201,7 @@ func printRespValue(respValue *RespValue) {
             for _, v := range value {
                 printRespValue(v)
             }
+            //fmt.Println("Array: ", value)
         }
     case BOOLEANS:
         if value, ok := respValue.Value.(bool); ok {

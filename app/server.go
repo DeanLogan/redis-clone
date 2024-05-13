@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 )
 
 func main() {
@@ -50,7 +52,7 @@ func handleConnection(conn net.Conn) {
                 fmt.Println("Error: empty array")
                 return
             }
-            switch inputArr[0].Value {
+            switch strings.ToUpper(inputArr[0].Value.(string)) { // convert the command to uppercase to make it case-insensitive
             case "PING":
                 fmt.Println("ping message")
                 pingResponse(conn)
@@ -61,26 +63,40 @@ func handleConnection(conn net.Conn) {
                     return
                 }
                 echoResponse(conn, inputArr[1].Value.(string))
+            case "SET":
+                fmt.Println("set message")
+                msgLen := len(inputArr)
+                fmt.Println(msgLen)
+                if msgLen < 3 {
+                    fmt.Println("Error: SET command requires 2 arguments")
+                    return
+                }
+                fmt.Println(inputArr)
+                if msgLen > 3 {
+                    timeType := strings.ToUpper(inputArr[3].Value.(string)) // convert the command to uppercase to make it case-insensitive
+                    if timeType != "EX" && timeType != "PX" {
+                        fmt.Println("Error: invalid time type")
+                        return
+                    }
+                    if _, err := strconv.Atoi(inputArr[4].Value.(string)); err != nil {
+                        fmt.Println("Error: invalid time")
+                        return
+                    }
+                    setResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string), timeType, inputArr[4].Value.(string))
+                } else {
+                    setResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string), "", "")
+                }
+            case "GET":
+                fmt.Println("get message")
+                if len(inputArr) != 2 {
+                    fmt.Println("Error: GET command requires 1 argument")
+                    return
+                }
+                getResponse(conn, inputArr[1].Value.(string))
             default:
                 fmt.Println("Error: unknown command")
                 return
             }
         }
     }
-}
-
-func pingResponse(conn net.Conn) {
-	_, err := conn.Write([]byte("+PONG\r\n"))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
-}
-
-func echoResponse(conn net.Conn, msg string) {
-    _, err := conn.Write([]byte("$" + fmt.Sprint(len(msg)) + "\r\n" + msg + "\r\n"))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
 }
