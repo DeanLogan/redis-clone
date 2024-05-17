@@ -8,6 +8,8 @@ import (
 
 var cache = make(map[string]string)
 
+var role = "master"
+
 func pingResponse(conn net.Conn) {
 	_, err := conn.Write([]byte("+PONG\r\n"))
 	if err != nil {
@@ -17,7 +19,7 @@ func pingResponse(conn net.Conn) {
 }
 
 func echoResponse(conn net.Conn, msg string) {
-    _, err := conn.Write([]byte("$" + fmt.Sprint(len(msg)) + "\r\n" + msg + "\r\n"))
+    _, err := conn.Write([]byte(createBulkString(msg)))
 	if err != nil {
 		fmt.Println("Error sending response: ", err.Error())
 		return
@@ -62,7 +64,15 @@ func getResponse(conn net.Conn, key string) {
 		sendErrorResponse(conn)
 		return
 	}
-	_, err := conn.Write([]byte("$" + fmt.Sprint(len(value)) + "\r\n" + value + "\r\n"))
+	_, err := conn.Write([]byte(createBulkString(value)))
+	if err != nil {
+		fmt.Println("Error sending response: ", err.Error())
+		return
+	}
+}
+
+func infoResponse(conn net.Conn) {
+	_, err := conn.Write([]byte(createBulkString(fmt.Sprintf("role:%s",role))))
 	if err != nil {
 		fmt.Println("Error sending response: ", err.Error())
 		return

@@ -97,6 +97,9 @@ func handleConnection(conn net.Conn) {
                     return
                 }
                 getResponse(conn, inputArr[1].Value.(string))
+            case "INFO":
+                fmt.Println("info message")
+                infoResponse(conn)
             default:
                 fmt.Println("Error: unknown command")
                 return

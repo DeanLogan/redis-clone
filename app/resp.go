@@ -173,6 +173,10 @@ func readPush(msg string) ([]string, error) {
 	return nil, errors.New("function not implemented")
 }
 
+func createBulkString(msg string) string {
+    return fmt.Sprintf("$%d\r\n%s\r\n", len(msg), msg)
+}
+
 func isRespType(val byte) bool {
     switch val {
     case STRING, ERROR, INTEGER, BULK, ARRAY, NULL, BOOLEANS, DOUBLE, BIG_NUMBER, BULK_ERROR, VERBATIM_STRING, MAPS, SETS, PUSH:
