@@ -5,12 +5,33 @@ import (
 	"fmt"
 	"net"
     "flag"
+    "time"
 	"strconv"
 	"strings"
+    "math/rand"
 )
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var info = map[string]string {
+    "role": "master",
+    "connected_slaves": "0",
+    "master_replid": "",
+    "master_repl_offset": "0",
+}
+
+func randStringWithCharset(length int, charset string) string {
+    seededRand := rand.New(rand.NewSource(time.Now().UnixNano()))
+    b := make([]byte, length)
+    for i := range b {
+        b[i] = charset[seededRand.Intn(len(charset))]
+    }
+    return string(b)
+}
 
 func main() {
     port := flag.Int("port", 6379, "port to listen on")
+    replicaof := flag.String("replicaof", "", "replication of master")
     flag.Parse()
 
     l, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", *port))
@@ -19,6 +40,13 @@ func main() {
         os.Exit(1)
     }
 
+    if *replicaof != "" {
+        info["role"] = "slave"
+    } else {
+        info["master_replid"] = randStringWithCharset(40, charset)
+    }
+
+    fmt.Printf("Role: %s\n", *replicaof)
     fmt.Printf("Listening on %d\n", *port)
 
     for {
