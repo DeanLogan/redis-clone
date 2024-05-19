@@ -6,6 +6,7 @@ import (
 	"net"
     "flag"
     "time"
+    "errors"
 	"strconv"
 	"strings"
     "math/rand"
@@ -18,6 +19,8 @@ var info = map[string]string {
     "connected_slaves": "0",
     "master_replid": "",
     "master_repl_offset": "0",
+    "master_host":"localhost",
+    "master_port": "6379",
 }
 
 func randStringWithCharset(length int, charset string) string {
@@ -42,6 +45,23 @@ func main() {
 
     if *replicaof != "" {
         info["role"] = "slave"
+
+        // reformats the replicaof string to be in the form of host:port
+        *replicaof = strings.ReplaceAll(*replicaof, " ", ":")
+        replicaofArr := strings.Split(*replicaof, ":")
+
+        // adds the master host and port to the info map
+        info["master_host"] = replicaofArr[0]
+        info["master_port"] = replicaofArr[1] 
+
+        masterConn := connectToMaster(*replicaof)
+        if masterConn == nil {
+            fmt.Println("Error connecting to master")
+            os.Exit(1)
+        }
+        
+        handshake(masterConn, strconv.Itoa(*port))
+
     } else {
         info["master_replid"] = randStringWithCharset(40, charset)
     }
@@ -62,9 +82,73 @@ func main() {
     }
 }
 
+func handshake(conn net.Conn, port string) {
+    pingToServer(conn)
+    sendRepliconfToMaster(conn, "listening-port", port)
+    time.Sleep(500 * time.Millisecond)
+    sendRepliconfToMaster(conn, "capa", "pysync2")
+    time.Sleep(500 * time.Millisecond)
+    pyngToServer(conn)
+}
+
+func connectToMaster(serverAddr string) net.Conn {
+    conn, err := net.Dial("tcp", serverAddr)
+    if err != nil {
+        fmt.Println("Error connecting to server: ", err.Error())
+        return nil
+    }
+    return conn
+}
+
+func pyngToServer(conn net.Conn) {
+    message := "*3\r\n" + createBulkString("PSYNC") + createBulkString("?") + createBulkString("-1")
+    _, err := conn.Write([]byte(message))
+    if err != nil {
+        fmt.Println("error sending message: ")
+        return
+    }
+}
+
+func sendRepliconfToMaster(conn net.Conn, command string, port string) error {
+    message := "*3\r\n" + createBulkString("REPLCONF") + createBulkString(command) + createBulkString(port)
+    _, err := conn.Write([]byte(message))
+    if err != nil {
+        fmt.Println("error sending message: ")
+        return errors.New("error sending message: " + err.Error())
+    }
+
+    buf := make([]byte, 1024)
+    textStart, err := conn.Read(buf)
+    if err != nil {
+        fmt.Println("error reading: ")
+        return errors.New("error reading: " + err.Error())
+    }
+
+    response, err := parseRespValue(string(buf[:textStart]))
+    if err != nil {
+        fmt.Println("error parsing resp value: ")
+        return errors.New("error parsing resp value: " + err.Error())
+    }
+    if response.Value.(string) != "+OK\r\n" {
+        fmt.Println("error response was not OK")
+        return errors.New("error response was not OK")
+    }
+
+    return nil
+}
+
+func pingToServer(conn net.Conn) {
+    _, err := conn.Write([]byte("*1\r\n"+createBulkString("PING")))
+    if err != nil {
+        fmt.Println("Error sending message: ", err.Error())
+        return
+    }
+    time.Sleep(1 * time.Second)
+}
+
 func handleConnection(conn net.Conn) {
     defer conn.Close()
-
+    
     for {
         buf := make([]byte, 1024)
         textStart, err := conn.Read(buf)
@@ -128,6 +212,17 @@ func handleConnection(conn net.Conn) {
             case "INFO":
                 fmt.Println("info message")
                 infoResponse(conn)
+            case "REPLCONF":
+                fmt.Println("replconf message")
+                if info["role"] == "slave" {
+                    fmt.Println("Error: slave cannot be a master")
+                    return
+                }
+                if len(inputArr) != 3 {
+                    fmt.Println("Error: REPLCONF command requires 2 arguments")
+                    return
+                }
+                repliconfResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string))
             default:
                 fmt.Println("Error: unknown command")
                 return

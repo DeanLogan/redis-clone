@@ -45,17 +45,6 @@ func setResponse(conn net.Conn, key string, value string, timeType string, expir
 	}
 }
 
-func expiryCache(expiryTime string, key string) (error) {
-	duration, err := time.ParseDuration(expiryTime)
-	if err != nil {
-		return err
-	}
-	time.AfterFunc(duration, func() {
-		delete(cache, key)
-	})
-	return nil
-}
-
 func getResponse(conn net.Conn, key string) {
 	value, ok := cache[key]
 	if !ok {
@@ -80,6 +69,49 @@ func infoResponse(conn net.Conn) {
 		fmt.Println("Error sending response: ", err.Error())
 		return
 	}
+}
+
+func repliconfResponse(conn net.Conn, command string, port string) {
+	switch command {
+	case "listening-port":
+		info["listening-port"] = port
+		okResponse(conn)
+	case "capa":
+		if _, ok := info["listening-port"]; !ok {
+			fmt.Println("Error: no listening port set")
+			return 
+		}
+		okResponse(conn)
+	case "?":
+		if _, ok := info["listening-port"]; !ok {
+			fmt.Println("Error: no listening port set")
+			return 
+		}
+		_, err := conn.Write([]byte("+FULLRESYNC ? 0\r\n"))
+		if err != nil {
+			fmt.Println("Error sending response: ", err.Error())
+			return
+		}
+	}
+}
+
+func okResponse(conn net.Conn) {
+	_, err := conn.Write([]byte("+OK\r\n"))
+	if err != nil {
+		fmt.Println("Error sending response: ", err.Error())
+		return
+	}
+}
+
+func expiryCache(expiryTime string, key string) (error) {
+	duration, err := time.ParseDuration(expiryTime)
+	if err != nil {
+		return err
+	}
+	time.AfterFunc(duration, func() {
+		delete(cache, key)
+	})
+	return nil
 }
 
 func sendErrorResponse(conn net.Conn) {
