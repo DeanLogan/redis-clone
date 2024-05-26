@@ -82,16 +82,18 @@ func repliconfResponse(conn net.Conn, command string, port string) {
 			return 
 		}
 		okResponse(conn)
-	case "?":
-		if _, ok := info["listening-port"]; !ok {
-			fmt.Println("Error: no listening port set")
-			return 
-		}
-		_, err := conn.Write([]byte("+FULLRESYNC ? 0\r\n"))
-		if err != nil {
-			fmt.Println("Error sending response: ", err.Error())
-			return
-		}
+	}
+}
+
+func psyncResponse(conn net.Conn, offset string, port string) {
+	if _, ok := info["listening-port"]; !ok {
+		fmt.Println("Error: no listening port set")
+		return 
+	}
+	_, err := conn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s %v\r\n", info["master_replid"], info["master_repl_offset"])))
+	if err != nil {
+		fmt.Println("Error sending response: ", err.Error())
+		return
 	}
 }
 

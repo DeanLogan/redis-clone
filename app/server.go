@@ -223,6 +223,17 @@ func handleConnection(conn net.Conn) {
                     return
                 }
                 repliconfResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string))
+            case "PSYNC":
+                fmt.Println("psync message")
+                if info["role"] == "slave" {
+                    fmt.Println("Error: slave cannot be a master")
+                    return
+                }
+                if len(inputArr) != 3 {
+                    fmt.Println("Error: PSYNC command requires 2 arguments")
+                    return
+                }
+                psyncResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string))
             default:
                 fmt.Println("Error: unknown command")
                 return

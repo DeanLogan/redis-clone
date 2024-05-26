@@ -9,7 +9,6 @@ import (
 
 const (
 	STRING  = '+'
-	ERROR   = '-'
 	INTEGER = ':'
 	BULK    = '$'
 	ARRAY   = '*'
@@ -35,8 +34,10 @@ func parseRespValue(msg string) (*RespValue, error) {
 
     respValue.Type = msg[0]
 
+    fmt.Println("new messg: ", strings.ReplaceAll(msg, "\r\n", "\\r\\n"))
+
     switch respValue.Type {
-    case STRING, ERROR, NULL:
+    case STRING, NULL:
         respValue.Value, err = readLine(msg[1:])
     case INTEGER:
         respValue.Value, err = readInt(msg[1:])
@@ -126,6 +127,7 @@ func readArray(msg string) ([]*RespValue, error) {
         }
     }
     msgs = append(msgs, str)
+    fmt.Println("array:", msgs)
 
     for _, msg := range msgs {
         respValue, err := parseRespValue(msg)
@@ -179,7 +181,7 @@ func createBulkString(msg string) string {
 
 func isRespType(val byte) bool {
     switch val {
-    case STRING, ERROR, INTEGER, BULK, ARRAY, NULL, BOOLEANS, DOUBLE, BIG_NUMBER, BULK_ERROR, VERBATIM_STRING, MAPS, SETS, PUSH:
+    case STRING, INTEGER, BULK, ARRAY, NULL, BOOLEANS, DOUBLE, BIG_NUMBER, BULK_ERROR, VERBATIM_STRING, MAPS, SETS, PUSH:
         return true
     default:
         return false
@@ -188,7 +190,7 @@ func isRespType(val byte) bool {
 
 func printRespValue(respValue *RespValue) {
     switch respValue.Type {
-    case STRING, ERROR, NULL, BULK, BULK_ERROR, VERBATIM_STRING:
+    case STRING, NULL, BULK, BULK_ERROR, VERBATIM_STRING:
         if value, ok := respValue.Value.(string); ok {
             fmt.Println("String: ", value)
         }
