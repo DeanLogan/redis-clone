@@ -85,7 +85,7 @@ func repliconfResponse(conn net.Conn, command string, port string) {
 	}
 }
 
-func psyncResponse(conn net.Conn, offset string, port string) {
+func psyncResponse(conn net.Conn) {
 	if _, ok := info["listening-port"]; !ok {
 		fmt.Println("Error: no listening port set")
 		return 

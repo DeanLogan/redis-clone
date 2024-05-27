@@ -1,15 +1,16 @@
 package main
 
 import (
-	"os"
+	"encoding/base64"
+	"errors"
+	"flag"
 	"fmt"
+	"math/rand"
 	"net"
-    "flag"
-    "time"
-    "errors"
+	"os"
 	"strconv"
 	"strings"
-    "math/rand"
+	"time"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -62,6 +63,8 @@ func main() {
         
         handshake(masterConn, strconv.Itoa(*port))
 
+        
+
     } else {
         info["master_replid"] = randStringWithCharset(40, charset)
     }
@@ -88,7 +91,7 @@ func handshake(conn net.Conn, port string) {
     time.Sleep(500 * time.Millisecond)
     sendRepliconfToMaster(conn, "capa", "pysync2")
     time.Sleep(500 * time.Millisecond)
-    pyngToServer(conn)
+    psyncToServer(conn)
 }
 
 func connectToMaster(serverAddr string) net.Conn {
@@ -100,7 +103,7 @@ func connectToMaster(serverAddr string) net.Conn {
     return conn
 }
 
-func pyngToServer(conn net.Conn) {
+func psyncToServer(conn net.Conn) {
     message := "*3\r\n" + createBulkString("PSYNC") + createBulkString("?") + createBulkString("-1")
     _, err := conn.Write([]byte(message))
     if err != nil {
@@ -146,6 +149,30 @@ func pingToServer(conn net.Conn) {
     time.Sleep(1 * time.Second)
 }
 
+func sendEmptyRDB(conn net.Conn) {
+    fmt.Println("Sending empty RDB")
+    base64String := "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="
+    data, err := base64ToBinary(base64String)
+    if err != nil {
+        fmt.Println("Error decoding base64 string:", err)
+        return
+    }
+
+    _, err = conn.Write([]byte(fmt.Sprintf("$%s\r\n%v", strconv.Itoa(len(data)), data)))
+    if err != nil {
+        fmt.Println("Error sending message: ", err.Error())
+        return
+    }
+}
+
+func base64ToBinary(base64String string) (string, error) {
+    data, err := base64.StdEncoding.DecodeString(base64String)
+    if err != nil {
+        return "", err
+    }
+    return string(data), nil
+}
+
 func handleConnection(conn net.Conn) {
     defer conn.Close()
     
@@ -153,6 +180,7 @@ func handleConnection(conn net.Conn) {
         buf := make([]byte, 1024)
         textStart, err := conn.Read(buf)
         if err != nil {
+            fmt.Println("failed reading from connection")
             fmt.Println("Error reading:", err.Error())
             return
         }
@@ -233,7 +261,19 @@ func handleConnection(conn net.Conn) {
                     fmt.Println("Error: PSYNC command requires 2 arguments")
                     return
                 }
-                psyncResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string))
+                psyncResponse(conn)
+                sendEmptyRDB(conn)
+            case "FULLRESYNC":
+                fmt.Println("fullresync message")
+                if info["role"] == "slave" {
+                    fmt.Println("Error: slave cannot be a master")
+                    return
+                }
+                if len(inputArr) != 3 {
+                    fmt.Println("Error: FULLRESYNC command requires 2 arguments")
+                    return
+                }
+                sendEmptyRDB(conn)
             default:
                 fmt.Println("Error: unknown command")
                 return
