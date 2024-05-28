@@ -24,7 +24,7 @@ func echoResponse(conn net.Conn, msg string) {
 	}
 }
 
-func setResponse(conn net.Conn, key string, value string, timeType string, expiryTime string) {
+func setResponse(conn net.Conn, key string, value string, timeType string, expiryTime string, messageSent []byte) {
 	switch timeType {
 	case "EX": // time is given in seconds
 		err := expiryCache(expiryTime+"s", key)
@@ -38,6 +38,9 @@ func setResponse(conn net.Conn, key string, value string, timeType string, expir
 		}
 	}
 	cache[key] = value
+	if info["role"] == "master" {
+		sendMessagesToSlaves(messageSent, slavesConnected)
+	}
 	_, err := conn.Write([]byte("+OK\r\n"))
 	if err != nil {
 		fmt.Println("Error sending response: ", err.Error())
@@ -121,5 +124,11 @@ func sendErrorResponse(conn net.Conn) {
 	if err != nil {
 		fmt.Println("Error sending response: ", err.Error())
 		return
+	}
+}
+
+func sendMessagesToSlaves(msg []byte, slaves []net.Conn) {
+	for _, slave := range slaves {
+		slave.Write(msg)
 	}
 }

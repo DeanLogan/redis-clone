@@ -1,19 +1,21 @@
 package main
 
 import (
-	"encoding/base64"
-	"errors"
-	"flag"
-	"fmt"
-	"math/rand"
-	"net"
-	"os"
-	"strconv"
-	"strings"
-	"time"
+    "encoding/base64"
+    "errors"
+    "flag"
+    "fmt"
+    "math/rand"
+    "net"
+    "os"
+    "strconv"
+    "strings"
+    "time"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+var slavesConnected = []net.Conn{}
 
 var info = map[string]string {
     "role": "master",
@@ -47,7 +49,7 @@ func main() {
     if *replicaof != "" {
         info["role"] = "slave"
 
-        // reformats the replicaof string to be in the form of host:port
+        // reformats the repliconf string to be in the form of host:port
         *replicaof = strings.ReplaceAll(*replicaof, " ", ":")
         replicaofArr := strings.Split(*replicaof, ":")
 
@@ -62,9 +64,6 @@ func main() {
         }
         
         handshake(masterConn, strconv.Itoa(*port))
-
-        
-
     } else {
         info["master_replid"] = randStringWithCharset(40, charset)
     }
@@ -226,9 +225,9 @@ func handleConnection(conn net.Conn) {
                         fmt.Println("Error: invalid time")
                         return
                     }
-                    setResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string), timeType, inputArr[4].Value.(string))
+                    setResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string), timeType, inputArr[4].Value.(string), buf[:textStart])
                 } else {
-                    setResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string), "", "")
+                    setResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string), "", "", buf[:textStart])
                 }
             case "GET":
                 fmt.Println("get message")
@@ -262,6 +261,8 @@ func handleConnection(conn net.Conn) {
                     return
                 }
                 psyncResponse(conn)
+                // handshake complete, slave has been connected add to the list of slaves and sends an empty RDB file
+                slavesConnected = append(slavesConnected, conn)
                 sendEmptyRDB(conn)
             case "FULLRESYNC":
                 fmt.Println("fullresync message")
