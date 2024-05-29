@@ -13,17 +13,30 @@ import (
     "time"
 )
 
+type Info struct {
+    Role string
+    ConnectedSlavesNum int
+    MasterReplid string
+    MasterReplOffset int
+    MasterHost string
+    MasterPort int
+    SlavesConnected []net.Conn
+    ListeningPort string
+    Port int
+}
+
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-var slavesConnected = []net.Conn{}
-
-var info = map[string]string {
-    "role": "master",
-    "connected_slaves": "0",
-    "master_replid": "",
-    "master_repl_offset": "0",
-    "master_host":"localhost",
-    "master_port": "6379",
+var info = Info {
+    Role:               "master",
+    ConnectedSlavesNum: 0,
+    MasterReplid:       "",
+    MasterReplOffset:   0,
+    MasterHost:         "localhost",
+    MasterPort:         6379,
+    SlavesConnected:    []net.Conn{},
+    ListeningPort:      "",
+    Port:               6379,
 }
 
 func randStringWithCharset(length int, charset string) string {
@@ -46,16 +59,18 @@ func main() {
         os.Exit(1)
     }
 
+    info.Port = *port
+
     if *replicaof != "" {
-        info["role"] = "slave"
+        info.Role = "slave"
 
         // reformats the repliconf string to be in the form of host:port
         *replicaof = strings.ReplaceAll(*replicaof, " ", ":")
         replicaofArr := strings.Split(*replicaof, ":")
 
         // adds the master host and port to the info map
-        info["master_host"] = replicaofArr[0]
-        info["master_port"] = replicaofArr[1] 
+        info.MasterHost = replicaofArr[0]
+        info.MasterPort, _ = strconv.Atoi(replicaofArr[1])
 
         masterConn := connectToMaster(*replicaof)
         if masterConn == nil {
@@ -65,10 +80,11 @@ func main() {
         
         handshake(masterConn, strconv.Itoa(*port))
     } else {
-        info["master_replid"] = randStringWithCharset(40, charset)
+        info.MasterReplid = randStringWithCharset(40, charset)
     }
 
-    fmt.Printf("Role: %s\n", *replicaof)
+    fmt.Printf("Role: %s\n", info.Role)
+    fmt.Printf("replica of: %s\n", *replicaof)
     fmt.Printf("Listening on %d\n", *port)
 
     for {
@@ -78,7 +94,10 @@ func main() {
             os.Exit(1)
         }
 
-        fmt.Println("Connection accepted")
+        fmt.Println("Connection accepted from: ", conn.RemoteAddr().String())
+        cache["foo"] = "123"
+        cache["bar"] = "456"
+        cache["baz"] = "789"
 
         go handleConnection(conn)
     }
@@ -113,6 +132,9 @@ func psyncToServer(conn net.Conn) {
 
 func sendRepliconfToMaster(conn net.Conn, command string, port string) error {
     message := "*3\r\n" + createBulkString("REPLCONF") + createBulkString(command) + createBulkString(port)
+    fmt.Println("Send Message To Master", conn.RemoteAddr().(*net.TCPAddr).Port)
+    fmt.Println("Send Message To Master", conn.RemoteAddr().(*net.TCPAddr))
+    fmt.Println("My port: ", info.Port)
     _, err := conn.Write([]byte(message))
     if err != nil {
         fmt.Println("error sending message: ")
@@ -178,6 +200,7 @@ func handleConnection(conn net.Conn) {
     for {
         buf := make([]byte, 1024)
         textStart, err := conn.Read(buf)
+        fmt.Println("textStart: ", textStart)
         if err != nil {
             fmt.Println("failed reading from connection")
             fmt.Println("Error reading:", err.Error())
@@ -241,7 +264,7 @@ func handleConnection(conn net.Conn) {
                 infoResponse(conn)
             case "REPLCONF":
                 fmt.Println("replconf message")
-                if info["role"] == "slave" {
+                if info.Role == "slave" {
                     fmt.Println("Error: slave cannot be a master")
                     return
                 }
@@ -252,7 +275,7 @@ func handleConnection(conn net.Conn) {
                 repliconfResponse(conn, inputArr[1].Value.(string), inputArr[2].Value.(string))
             case "PSYNC":
                 fmt.Println("psync message")
-                if info["role"] == "slave" {
+                if info.Role == "slave" {
                     fmt.Println("Error: slave cannot be a master")
                     return
                 }
@@ -262,11 +285,12 @@ func handleConnection(conn net.Conn) {
                 }
                 psyncResponse(conn)
                 // handshake complete, slave has been connected add to the list of slaves and sends an empty RDB file
-                slavesConnected = append(slavesConnected, conn)
+                info.SlavesConnected = append(info.SlavesConnected, conn)
+                fmt.Println("Slaves connected: ", conn.RemoteAddr().String())
                 sendEmptyRDB(conn)
             case "FULLRESYNC":
                 fmt.Println("fullresync message")
-                if info["role"] == "slave" {
+                if info.Role == "slave" {
                     fmt.Println("Error: slave cannot be a master")
                     return
                 }

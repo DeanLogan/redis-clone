@@ -29,6 +29,7 @@ type RespValue struct {
 }
 
 func parseRespValue(msg string) (*RespValue, error) {
+    fmt.Println("parsing resp value that has been sent")
     var respValue RespValue
     var err error
 

@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"net"
+	"reflect"
 	"time"
+	"unicode"
 )
 
 var cache = make(map[string]string)
@@ -38,18 +40,29 @@ func setResponse(conn net.Conn, key string, value string, timeType string, expir
 		}
 	}
 	cache[key] = value
-	if info["role"] == "master" {
-		sendMessagesToSlaves(messageSent, slavesConnected)
-	}
-	_, err := conn.Write([]byte("+OK\r\n"))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
+	fmt.Println("cache>", cache)
+	fmt.Println("key>", key)
+	fmt.Println("value>", value)
+	if info.Role == "master" {
+		sendMessagesToSlaves(messageSent, info.SlavesConnected)
+		// ok response is not sent if the message is sent to the slaves
+		_, err := conn.Write([]byte("+OK\r\n"))
+		if err != nil {
+			fmt.Println("Error sending response: ", err.Error())
+			return
+		}
 	}
 }
 
 func getResponse(conn net.Conn, key string) {
 	value, ok := cache[key]
+	fmt.Println(info.Role)
+	fmt.Println(info.ListeningPort)
+	fmt.Println("myPort>", info.Port)
+	fmt.Println("connected to>", conn.RemoteAddr().String())
+	fmt.Println("cache>", cache)
+	fmt.Println("Key>", key)
+	fmt.Println("Value>", value)
 	if !ok {
 		sendErrorResponse(conn)
 		return
@@ -62,25 +75,50 @@ func getResponse(conn net.Conn, key string) {
 }
 
 func infoResponse(conn net.Conn) {
-	response := ""
-	for key, value := range info {
-		response += fmt.Sprintf("%s:%s", key, value) + "\r\n"
-	}
-	response = response[:len(response)-2] // remove the last \r\n
-	_, err := conn.Write([]byte(createBulkString(response)))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
+    response := ""
+    v := reflect.ValueOf(info)
+    t := v.Type()
+
+    for i := 0; i < v.NumField(); i++ {
+        field := v.Field(i)
+        fieldName := toSnakeCase(t.Field(i).Name)
+        if field.Kind() == reflect.Slice {
+            response += fmt.Sprintf("%s:%d", fieldName, field.Len()) + "\r\n"
+        } else {
+            response += fmt.Sprintf("%s:%v", fieldName, field.Interface()) + "\r\n"
+        }
+    }
+    response = response[:len(response)-2] // remove the last \r\n
+    _, err := conn.Write([]byte(createBulkString(response)))
+    if err != nil {
+        fmt.Println("Error sending response: ", err.Error())
+        return
+    }
+}
+
+func toSnakeCase(str string) string {
+    runes := []rune(str)
+    length := len(runes)
+    var result []rune
+
+    for i := 0; i < length; i++ {
+        if i > 0 && unicode.IsUpper(runes[i]) && ((i+1 < length && unicode.IsLower(runes[i+1])) || unicode.IsLower(runes[i-1])) {
+            result = append(result, '_')
+        }
+        result = append(result, unicode.ToLower(runes[i]))
+    }
+
+    return string(result)
 }
 
 func repliconfResponse(conn net.Conn, command string, port string) {
 	switch command {
 	case "listening-port":
-		info["listening-port"] = port
+		fmt.Println("Listening port set to: ", port)
+		info.ListeningPort = port
 		okResponse(conn)
 	case "capa":
-		if _, ok := info["listening-port"]; !ok {
+		if info.ListeningPort == "" {
 			fmt.Println("Error: no listening port set")
 			return 
 		}
@@ -89,11 +127,11 @@ func repliconfResponse(conn net.Conn, command string, port string) {
 }
 
 func psyncResponse(conn net.Conn) {
-	if _, ok := info["listening-port"]; !ok {
+	if info.ListeningPort == "" {
 		fmt.Println("Error: no listening port set")
 		return 
 	}
-	_, err := conn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s %v\r\n", info["master_replid"], info["master_repl_offset"])))
+	_, err := conn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s %v\r\n", info.MasterReplid, info.MasterReplOffset)))
 	if err != nil {
 		fmt.Println("Error sending response: ", err.Error())
 		return
