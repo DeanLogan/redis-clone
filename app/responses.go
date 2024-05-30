@@ -2,98 +2,76 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"reflect"
+	"strconv"
+	"strings"
 	"time"
 	"unicode"
 )
 
-var cache = make(map[string]string)
-
-func pingResponse(conn net.Conn) {
-	_, err := conn.Write([]byte("+PONG\r\n"))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
+func commandResponse() string {
+    return "+OK\r\n"
 }
 
-func echoResponse(conn net.Conn, msg string) {
-    _, err := conn.Write([]byte(createBulkString(msg)))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
-}
-
-func setResponse(conn net.Conn, key string, value string, timeType string, expiryTime string, messageSent []byte) {
-	switch timeType {
-	case "EX": // time is given in seconds
-		err := expiryCache(expiryTime+"s", key)
-		if err != nil {
-			sendErrorResponse(conn)
+func replconfResponse(cmd []string) string {
+	switch strings.ToUpper(cmd[1]) {
+	case "GETACK":
+		if config.Role != "slave" && len(cmd) < 2 {
+			return errorResponse(fmt.Errorf("invalid replconf command"))
+		} 
+		return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(config.MasterReplOffset)})
+	case "CAPA":
+		if config.Role != "master" && config.ListeningPort == "" {
+			return errorResponse(fmt.Errorf("invalid replconf command"))
 		}
-	case "PX": // time is given in miliseconds
-		err := expiryCache(expiryTime+"ms", key)
-		if err != nil {
-			sendErrorResponse(conn)
+		return "+OK\r\n"
+	case "LISTENING-PORT":
+		if config.Role != "master" && len(cmd) < 2 {
+			return errorResponse(fmt.Errorf("invalid replconf command"))
 		}
-	}
-	cache[key] = value
-	fmt.Println("cache>", cache)
-	fmt.Println("key>", key)
-	fmt.Println("value>", value)
-	if info.Role == "master" {
-		sendMessagesToSlaves(messageSent, info.SlavesConnected)
-		// ok response is not sent if the message is sent to the slaves
-		_, err := conn.Write([]byte("+OK\r\n"))
-		if err != nil {
-			fmt.Println("Error sending response: ", err.Error())
-			return
-		}
+		config.ListeningPort = cmd[2]
+		return "+OK\r\n"
+	default:
+		return errorResponse(fmt.Errorf("invalid replconf command"))
 	}
 }
 
-func getResponse(conn net.Conn, key string) {
-	value, ok := cache[key]
-	fmt.Println(info.Role)
-	fmt.Println(info.ListeningPort)
-	fmt.Println("myPort>", info.Port)
-	fmt.Println("connected to>", conn.RemoteAddr().String())
-	fmt.Println("cache>", cache)
-	fmt.Println("Key>", key)
-	fmt.Println("Value>", value)
-	if !ok {
-		sendErrorResponse(conn)
-		return
-	}
-	_, err := conn.Write([]byte(createBulkString(value)))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
+func psyncResponse(cmd []string) (string, bool) {
+    if len(cmd) == 3 {
+        // TODO: Implement synch
+        return fmt.Sprintf("+FULLRESYNC %s 0\r\n", config.Replid), true
+    }
+    return "", false
 }
 
-func infoResponse(conn net.Conn) {
-    response := ""
-    v := reflect.ValueOf(info)
-    t := v.Type()
+func pingResponse() string {
+    return "+PONG\r\n"
+}
 
-    for i := 0; i < v.NumField(); i++ {
-        field := v.Field(i)
-        fieldName := toSnakeCase(t.Field(i).Name)
-        if field.Kind() == reflect.Slice {
-            response += fmt.Sprintf("%s:%d", fieldName, field.Len()) + "\r\n"
-        } else {
-            response += fmt.Sprintf("%s:%v", fieldName, field.Interface()) + "\r\n"
+func echoResponse(cmd []string) string {
+    return encodeBulkString(cmd[1])
+}
+
+func infoResponse(cmd []string) string {
+    if len(cmd) == 2 && strings.ToUpper(cmd[1]) == "REPLICATION" {
+        response := ""
+        v := reflect.ValueOf(config)
+        t := v.Type()
+
+        for i := 0; i < v.NumField(); i++ {
+            field := v.Field(i)
+            fieldName := toSnakeCase(t.Field(i).Name)
+            if field.Kind() == reflect.Slice {
+                response += fmt.Sprintf("%s:%d", fieldName, field.Len()) + "\r\n"
+            } else {
+                response += fmt.Sprintf("%s:%v", fieldName, field.Interface()) + "\r\n"
+            }
         }
+        response = response[:len(response)-2] // remove the last \r\n
+		fmt.Println(encodeBulkString(response))
+        return encodeBulkString(response)
     }
-    response = response[:len(response)-2] // remove the last \r\n
-    _, err := conn.Write([]byte(createBulkString(response)))
-    if err != nil {
-        fmt.Println("Error sending response: ", err.Error())
-        return
-    }
+    return ""
 }
 
 func toSnakeCase(str string) string {
@@ -111,62 +89,34 @@ func toSnakeCase(str string) string {
     return string(result)
 }
 
-func repliconfResponse(conn net.Conn, command string, port string) {
-	switch command {
-	case "listening-port":
-		fmt.Println("Listening port set to: ", port)
-		info.ListeningPort = port
-		okResponse(conn)
-	case "capa":
-		if info.ListeningPort == "" {
-			fmt.Println("Error: no listening port set")
-			return 
-		}
-		okResponse(conn)
-	}
+func setResponse(cmd []string) string {
+    // TODO: check length
+    key, value := cmd[1], cmd[2]
+    store[key] = value
+    if len(cmd) == 5 && strings.ToUpper(cmd[3]) == "PX" {
+        expiration, _ := strconv.Atoi(cmd[4])
+        ttl[key] = time.Now().Add(time.Millisecond * time.Duration(expiration))
+    }
+    return "+OK\r\n"
 }
 
-func psyncResponse(conn net.Conn) {
-	if info.ListeningPort == "" {
-		fmt.Println("Error: no listening port set")
-		return 
-	}
-	_, err := conn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s %v\r\n", info.MasterReplid, info.MasterReplOffset)))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
+func getResponse(cmd []string) string {
+    // TODO: check length
+    key := cmd[1]
+    value, ok := store[key]
+    if ok {
+        expiration, exists := ttl[key]
+        if !exists || expiration.After(time.Now()) {
+            return encodeBulkString(value)
+        } else if exists {
+            delete(ttl, key)
+            delete(store, key)
+            return encodeBulkString("")
+        }
+    } 
+    return encodeBulkString("")
 }
 
-func okResponse(conn net.Conn) {
-	_, err := conn.Write([]byte("+OK\r\n"))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
-}
-
-func expiryCache(expiryTime string, key string) (error) {
-	duration, err := time.ParseDuration(expiryTime)
-	if err != nil {
-		return err
-	}
-	time.AfterFunc(duration, func() {
-		delete(cache, key)
-	})
-	return nil
-}
-
-func sendErrorResponse(conn net.Conn) {
-	_, err := conn.Write([]byte("$-1\r\n"))
-	if err != nil {
-		fmt.Println("Error sending response: ", err.Error())
-		return
-	}
-}
-
-func sendMessagesToSlaves(msg []byte, slaves []net.Conn) {
-	for _, slave := range slaves {
-		slave.Write(msg)
-	}
+func errorResponse(err error) string {
+	return fmt.Sprintf("-%s\r\n", err.Error())
 }
