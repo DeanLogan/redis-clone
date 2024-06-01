@@ -19,7 +19,9 @@ func replconfResponse(cmd []string) string {
 		if config.Role != "slave" && len(cmd) < 2 {
 			return errorResponse(fmt.Errorf("invalid replconf command"))
 		} 
-		return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(config.MasterReplOffset)})
+        if cmd[2] == "*"{
+            return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(config.ReplOffset-37)}) // subtracted 37 as ReplOffset includes the current command which should not be included in the response
+        }
 	case "CAPA":
 		if config.Role != "master" && config.ListeningPort == "" {
 			return errorResponse(fmt.Errorf("invalid replconf command"))
@@ -31,9 +33,8 @@ func replconfResponse(cmd []string) string {
 		}
 		config.ListeningPort = cmd[2]
 		return "+OK\r\n"
-	default:
-		return errorResponse(fmt.Errorf("invalid replconf command"))
 	}
+    return errorResponse(fmt.Errorf("invalid replconf command"))
 }
 
 func psyncResponse(cmd []string) (string, bool) {

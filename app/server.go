@@ -128,12 +128,19 @@ func manageClientConnection(id int, conn net.Conn) {
 
 func readCommand(scanner *bufio.Scanner) ([]string, error) {
     cmd := []string{}
-    var arrSize, strSize int
+    var arrSize, strSize, byteLength int
     for scanner.Scan() {
         token := scanner.Text()
+        byteLength = len(token) + byteLength + 2
         switch token[0] {
         case '*':
-            arrSize, _ = strconv.Atoi(token[1:])
+            if len(token) != 1 {
+                arrSize, _ = strconv.Atoi(token[1:])
+            } else {
+                arrSize--
+                strSize = 0
+                cmd = append(cmd, token)
+            }
         case '$':
             strSize, _ = strconv.Atoi(token[1:])
         default:
@@ -148,6 +155,8 @@ func readCommand(scanner *bufio.Scanner) ([]string, error) {
             break
         }
     }
+    fmt.Println(byteLength)
+    config.ReplOffset += byteLength
     return cmd, nil
 }
 

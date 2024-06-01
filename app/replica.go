@@ -51,6 +51,8 @@ func handleMasterConnection(masterConn net.Conn, reader *bufio.Reader) {
         fmt.Printf("Size mismatch - got: %d, want: %d\n", receivedSize, rdbSize)
     }
 
+	config.ReplOffset = 0 // set offset to 0 after handshake and empty RDB file has been received
+
     go syncWithMaster(reader, masterConn)
 }
 
