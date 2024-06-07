@@ -75,21 +75,6 @@ func infoResponse(cmd []string) string {
     return ""
 }
 
-func toSnakeCase(str string) string {
-    runes := []rune(str)
-    length := len(runes)
-    var result []rune
-
-    for i := 0; i < length; i++ {
-        if i > 0 && unicode.IsUpper(runes[i]) && ((i+1 < length && unicode.IsLower(runes[i+1])) || unicode.IsLower(runes[i-1])) {
-            result = append(result, '_')
-        }
-        result = append(result, unicode.ToLower(runes[i]))
-    }
-
-    return string(result)
-}
-
 func setResponse(cmd []string) string {
     // TODO: check length
     key, value := cmd[1], cmd[2]
@@ -118,6 +103,25 @@ func getResponse(cmd []string) string {
     return encodeBulkString("")
 }
 
+func waitResponse(cmd []string) string {
+    return fmt.Sprintf(":%d\r\n", len(config.Replicas))
+}
+
 func errorResponse(err error) string {
 	return fmt.Sprintf("-%s\r\n", err.Error())
+}
+
+func toSnakeCase(str string) string {
+    runes := []rune(str)
+    length := len(runes)
+    var result []rune
+
+    for i := 0; i < length; i++ {
+        if i > 0 && unicode.IsUpper(runes[i]) && ((i+1 < length && unicode.IsLower(runes[i+1])) || unicode.IsLower(runes[i-1])) {
+            result = append(result, '_')
+        }
+        result = append(result, unicode.ToLower(runes[i]))
+    }
+
+    return string(result)
 }

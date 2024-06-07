@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -97,6 +98,14 @@ func manageClientConnection(id int, conn net.Conn) {
     fmt.Printf("[#%d] Client connected: %v\n", id, conn.RemoteAddr().String())
     scanner := bufio.NewScanner(conn)
 
+    handshakeCommands := [][]string{
+        {"PING"},
+        {"REPLCONF", "listening-port", strconv.Itoa(config.Port)},
+        {"REPLCONF", "capa", "psync2"},
+        {"PSYNC", "?", "-1"},
+    }
+    handshakeIndex := 0
+
     for {
         cmd, err := readCommand(scanner)
         if err != nil {
@@ -106,6 +115,16 @@ func manageClientConnection(id int, conn net.Conn) {
 
         if len(cmd) == 0 {
             break
+        }
+
+        // Check if the command matches the current handshake command
+        if handshakeIndex < len(handshakeCommands) && reflect.DeepEqual(cmd, handshakeCommands[handshakeIndex]) {
+            handshakeIndex++
+            // once handshake index reaches the same length as the commands, the handshake is complete and the replica is added to the list
+            if handshakeIndex == len(handshakeCommands) {
+                fmt.Printf("[#%d] Handshake completed\n", id)
+                config.Replicas = append(config.Replicas, conn)
+            }
         }
 
         fmt.Printf("[#%d] Command = %v\n", id, cmd)
@@ -195,6 +214,8 @@ func handleCommand(cmd []string) (response string, resynch bool) {
         response = setResponse(cmd)
     case "GET":
         response = getResponse(cmd)
+    case "WAIT":
+        response = waitResponse(cmd)
     }
     if isWrite {
         propagate(cmd)
