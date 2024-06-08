@@ -30,6 +30,7 @@ const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 var store = make(map[string]string)
 var ttl = make(map[string]time.Time)
+var ackReceived chan bool
 var config serverConfig
 
 func main() {
@@ -44,6 +45,7 @@ func main() {
 	config.MasterReplOffset = 0
     config.MasterReplid = randStringWithCharset(40, charset)
     config.ReplOffset = 0
+    ackReceived = make(chan bool)
 
 	if config.Role == "slave" {
 		masterConn, reader := connectToMaster()
@@ -194,6 +196,10 @@ func encodeStringArray(arr []string) string {
 	return result
 }
 
+func encodeInt(n int) string {
+	return fmt.Sprintf(":%d\r\n", n)
+}
+
 func handleCommand(cmd []string) (response string, resynch bool) {
     isWrite := false
     switch strings.ToUpper(cmd[0]) {
@@ -223,13 +229,18 @@ func handleCommand(cmd []string) (response string, resynch bool) {
     return
 }
 
-func sendAndCheckResponse(conn net.Conn, reader *bufio.Reader, command []string, expectedResponse string) {
+func sendAndCheckResponse(conn net.Conn, reader *bufio.Reader, command []string, expectedResponse string) (bool, error) {
     conn.Write([]byte(encodeStringArray(command)))
-    response, _ := reader.ReadString('\n')
+    response, err := reader.ReadString('\n')
+    if err != nil {
+        fmt.Printf("Error reading response: %v\n", err)
+        return false, err
+    }
     if !strings.Contains(response, expectedResponse) {
         fmt.Printf("Error: Expected %s but got %s\n", expectedResponse, response)
-        os.Exit(1)
+        return false, nil
     }
+    return true, nil
 }
 
 func randReplid() string {

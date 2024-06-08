@@ -57,10 +57,45 @@ func handleMasterConnection(masterConn net.Conn, reader *bufio.Reader) {
 }
 
 func handshake(masterConn net.Conn, reader *bufio.Reader) {
-	sendAndCheckResponse(masterConn, reader, []string{"PING"}, "PONG")
-	sendAndCheckResponse(masterConn, reader, []string{"REPLCONF", "listening-port", strconv.Itoa(config.Port)}, "OK")
-	sendAndCheckResponse(masterConn, reader, []string{"REPLCONF", "capa", "psync2"}, "OK")
-	sendAndCheckResponse(masterConn, reader, []string{"PSYNC", "?", "-1"}, "FULLRESYNC")
+	response, err := sendAndCheckResponse(masterConn, reader, []string{"PING"}, "PONG")
+	if !response {
+		fmt.Println("Failed to handshake with master")
+		return 
+	}
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	response, err = sendAndCheckResponse(masterConn, reader, []string{"REPLCONF", "listening-port", strconv.Itoa(config.Port)}, "OK")
+	if !response {
+		fmt.Println("Failed to handshake with master")
+		return
+	}
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	response, err = sendAndCheckResponse(masterConn, reader, []string{"REPLCONF", "capa", "psync2"}, "OK")
+	if !response {
+		fmt.Println("Failed to handshake with master")
+		return
+	}
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	response, err = sendAndCheckResponse(masterConn, reader, []string{"PSYNC", "?", "-1"}, "FULLRESYNC")
+	if !response {
+		fmt.Println("Failed to handshake with master")
+		return
+	}
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
 }
 
 func syncWithMaster(reader *bufio.Reader, masterConn net.Conn) {

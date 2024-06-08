@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -21,7 +23,12 @@ func replconfResponse(cmd []string) string {
 		} 
         if cmd[2] == "*"{
             return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(config.ReplOffset-37)}) // subtracted 37 as ReplOffset includes the current command which should not be included in the response
+        } else {
+            return "+OK\r\n"
         }
+        case "ACK":
+            ackReceived <- true
+            return ""
 	case "CAPA":
 		if config.Role != "master" && config.ListeningPort == "" {
 			return errorResponse(fmt.Errorf("invalid replconf command"))
@@ -76,7 +83,6 @@ func infoResponse(cmd []string) string {
 }
 
 func setResponse(cmd []string) string {
-    // TODO: check length
     key, value := cmd[1], cmd[2]
     store[key] = value
     if len(cmd) == 5 && strings.ToUpper(cmd[3]) == "PX" {
@@ -104,7 +110,74 @@ func getResponse(cmd []string) string {
 }
 
 func waitResponse(cmd []string) string {
-    return fmt.Sprintf(":%d\r\n", len(config.Replicas))
+    count, err := strconv.Atoi(cmd[1])
+    if err != nil {
+        return errorResponse(err)
+    }
+    timeout, err := strconv.Atoi(cmd[2])
+    if err != nil {
+        return errorResponse(err)
+    }
+	fmt.Printf("Wait count=%d timeout=%d\n", count, timeout)
+	propagate([]string{"REPLCONF", "GETACK", "*"})
+
+	for i := 0; i < len(config.Replicas); i++ {
+		go func(conn net.Conn) {
+			fmt.Println("waiting response from replica", conn.RemoteAddr().String())
+			buffer := make([]byte, 1024)
+			// TODO: Ignoring result, just "flushing" the response
+			_, err := conn.Read(buffer)
+			if err == nil {
+				fmt.Println("got response from replica", conn.RemoteAddr().String())
+			} else {
+				fmt.Println("error from replica", conn.RemoteAddr().String(), " => ", err.Error())
+			}
+			ackReceived <- true
+		}(config.Replicas[i])
+	}
+
+	timer := time.After(time.Duration(timeout) * time.Millisecond)
+
+	acks := 0
+    outer:
+    for acks < count {
+        select {
+        case <-ackReceived:
+            acks++
+            fmt.Println("acks =", acks)
+        case <-timer:
+            fmt.Println("timeout! acks =", acks)
+            break outer
+        }
+    }
+
+	return encodeInt(acks)
+}
+
+func task(wg *sync.WaitGroup, done chan<- struct{}, conn net.Conn, cmd []string) {
+    defer wg.Done()
+
+    _, err := conn.Write([]byte(encodeStringArray(cmd)))
+    if err != nil {
+        fmt.Println("Error sending message: ", err.Error())
+        return
+    }
+
+    buf := make([]byte, 1024)
+    for {
+        n, err := conn.Read(buf)
+        if err != nil {
+            fmt.Println("failed reading from connection")
+            fmt.Println("Error reading:", err.Error())
+            return
+        }
+
+        response := string(buf[:n])
+        if strings.Contains(response, "ACK") {
+            done <- struct{}{}
+            return
+        }
+    }
 }
 
 func errorResponse(err error) string {
