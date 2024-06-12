@@ -154,6 +154,43 @@ func waitResponse(cmd []string) string {
 	return encodeInt(acks)
 }
 
+func configResponse(cmd []string) string {
+    fmt.Println("configResponse", len(cmd))
+    if len(cmd) >= 3 {
+        switch strings.ToUpper(cmd[1]) {
+        case "GET":
+            switch strings.ToLower(cmd[2]) {
+            case "dir":
+                return encodeStringArray([]string{"dir", config.Dir})
+            case "dbfilename":
+                return encodeStringArray([]string{"dbfilename", config.Dbfilename})
+            }
+        case "SET":
+            switch strings.ToUpper(cmd[2]) {
+            case "REPL-ROLE":
+                if len(cmd) < 4 {
+                    return errorResponse(fmt.Errorf("invalid config set command, REPL-ROLE requires a value"))
+                }
+                config.Role = cmd[3]
+                return "+OK\r\n"
+            case "REPL-ID":
+                if len(cmd) < 4 {
+                    return errorResponse(fmt.Errorf("invalid config set command, REPL-ID requires a value"))
+                }
+                config.Replid = cmd[3]
+                return "+OK\r\n"
+            case "REPL-ACK":
+                if len(cmd) < 4 {
+                    return errorResponse(fmt.Errorf("invalid config set command, REPL-ACK requires a value"))
+                }
+                config.ReplOffset, _ = strconv.Atoi(cmd[3])
+                return "+OK\r\n"
+            }
+        }
+    }
+    return errorResponse(fmt.Errorf("invalid config set command, invalid number of arguments"))
+}
+
 func task(wg *sync.WaitGroup, done chan<- struct{}, conn net.Conn, cmd []string) {
     defer wg.Done()
 

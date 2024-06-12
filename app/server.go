@@ -24,6 +24,8 @@ type serverConfig struct {
 	ListeningPort 	 string
 	MasterReplOffset int
     MasterReplid     string
+    Dir              string
+    Dbfilename       string
 }
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -36,6 +38,8 @@ var config serverConfig
 func main() {
 	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")
 	flag.StringVar(&config.ReplicaofHost, "replicaof", "", "start server in replica mode of given host and port")
+	flag.StringVar(&config.Dir, "dir", "", "the path to the directory where the RDB file is stored")
+	flag.StringVar(&config.Dbfilename, "dbfilename", "", "the name of the RDB file")
 	flag.Parse()
 
     handleReplicaConfig()
@@ -222,6 +226,8 @@ func handleCommand(cmd []string) (response string, resynch bool) {
         response = getResponse(cmd)
     case "WAIT":
         response = waitResponse(cmd)
+    case "CONFIG":
+        response = configResponse(cmd)
     }
     if isWrite {
         propagate(cmd)
