@@ -191,6 +191,16 @@ func configResponse(cmd []string) string {
     return errorResponse(fmt.Errorf("invalid config set command, invalid number of arguments"))
 }
 
+func keysResponse(cmd []string) string {
+    if cmd[1] != "*" {
+        return errorResponse(fmt.Errorf("invalid number of arguments"))
+    }
+    for key := range store {
+        keys = append(keys, key)
+    }
+    return encodeStringArray(keys)
+}
+
 func task(wg *sync.WaitGroup, done chan<- struct{}, conn net.Conn, cmd []string) {
     defer wg.Done()
 

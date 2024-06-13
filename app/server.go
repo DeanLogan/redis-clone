@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
@@ -30,8 +31,9 @@ type serverConfig struct {
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-var store = make(map[string]string)
+var store = make(map[string]string) 
 var ttl = make(map[string]time.Time)
+var keys = []string{}
 var ackReceived chan bool
 var config serverConfig
 
@@ -50,6 +52,14 @@ func main() {
     config.MasterReplid = randStringWithCharset(40, charset)
     config.ReplOffset = 0
     ackReceived = make(chan bool)
+
+    if len(config.Dir) > 0 && len(config.Dbfilename) > 0 {
+		rdbPath := filepath.Join(config.Dir, config.Dbfilename)
+		err := readRDB(rdbPath)
+		if err != nil {
+			fmt.Printf("Failed to load '%s': %v\n", rdbPath, err)
+		}
+	}
 
 	if config.Role == "slave" {
 		masterConn, reader := connectToMaster()
@@ -228,6 +238,8 @@ func handleCommand(cmd []string) (response string, resynch bool) {
         response = waitResponse(cmd)
     case "CONFIG":
         response = configResponse(cmd)
+    case "KEYS":
+        response = keysResponse(cmd)
     }
     if isWrite {
         propagate(cmd)
