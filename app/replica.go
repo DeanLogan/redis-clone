@@ -9,8 +9,6 @@ import (
 	"strings"
 )
 
-// handleReplicaConfig processes the configuration for the replica.
-// It splits the ReplicaofHost into host and port parts.
 func handleReplicaConfig() {
     if len(config.ReplicaofHost) > 0 {
         parts := strings.Split(config.ReplicaofHost, " ")
@@ -21,8 +19,6 @@ func handleReplicaConfig() {
     }
 }
 
-// connectToMaster establishes a TCP connection to the master server.
-// It returns the connection and a reader for the connection.
 func connectToMaster() (net.Conn, *bufio.Reader) {
     masterConn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", config.ReplicaofHost, config.ReplicaofPort))
     if err != nil {
@@ -36,8 +32,6 @@ func connectToMaster() (net.Conn, *bufio.Reader) {
     return masterConn, reader
 }
 
-// handleMasterConnection manages the connection with the master server.
-// It reads the RDB file from the master and starts the synchronization process.
 func handleMasterConnection(masterConn net.Conn, reader *bufio.Reader) {
     // receiving RDB (ignoring it for now)
     response, _ := reader.ReadString('\n')
@@ -62,8 +56,6 @@ func handleMasterConnection(masterConn net.Conn, reader *bufio.Reader) {
     go syncWithMaster(reader, masterConn)
 }
 
-// handshake performs the initial handshake with the master server.
-// It sends several commands to the master and checks the responses.
 func handshake(masterConn net.Conn, reader *bufio.Reader) {
 	response, err := sendAndCheckResponse(masterConn, reader, []string{"PING"}, "PONG")
 	if !response {
@@ -106,8 +98,6 @@ func handshake(masterConn net.Conn, reader *bufio.Reader) {
 	}
 }
 
-// syncWithMaster synchronizes the replica with the master server.
-// It reads commands from the master and handles them.
 func syncWithMaster(reader *bufio.Reader, masterConn net.Conn) {
 	scanner := bufio.NewScanner(reader)
 	for {

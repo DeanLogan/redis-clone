@@ -11,24 +11,21 @@ import (
 	"time"
 )
 
-// readEncodedInt reads an encoded integer from the provided reader.
-// It returns the decoded integer and any error encountered.
 func readEncodedInt(reader *bufio.Reader) (int, error) {
 	mask := byte(0b11000000)
-	// Read the first byte
 	b0, err := reader.ReadByte()
 	if err != nil {
 		return 0, err
 	}
-	if b0&mask == 0b00000000 { // If the two most significant bits are 00, the value is in the first byte
+	if b0&mask == 0b00000000 {
 		return int(b0), nil
-	} else if b0&mask == 0b01000000 { // If the two most significant bits are 01, the value is in the first and second byte
+	} else if b0&mask == 0b01000000 {
 		b1, err := reader.ReadByte()
 		if err != nil {
 			return 0, err
 		}
 		return int(b1)<<6 | int(b0&mask), nil
-	} else if b0&mask == 0b10000000 { // If the two most significant bits are 10, the value is in the first four bytes
+	} else if b0&mask == 0b10000000 {
 		b1, _ := reader.ReadByte()
 		b2, _ := reader.ReadByte()
 		b3, _ := reader.ReadByte()
@@ -57,8 +54,6 @@ func readEncodedInt(reader *bufio.Reader) (int, error) {
 	}
 }
 
-// readEncodedString reads an encoded string from the provided reader.
-// It returns the decoded string and any error encountered.
 func readEncodedString(reader *bufio.Reader) (string, error) {
 	size, err := readEncodedInt(reader)
 	if err != nil {
@@ -75,8 +70,6 @@ func readEncodedString(reader *bufio.Reader) (string, error) {
 	return string(data), nil
 }
 
-// readRDB reads a Redis RDB file from the provided path.
-// It returns any error encountered during the reading process.
 func readRDB(rdbPath string) error {
 	file, err := os.Open(rdbPath)
 	if err != nil {
@@ -107,78 +100,46 @@ func readRDB(rdbPath string) error {
 			return err
 		}
 
+		// TODO: handle errors properly
 		switch opCode {
-			case 0xFA: // Auxiliary fields
-				key, err := readEncodedString(reader)
-				if err != nil {
-					fmt.Printf("Error reading key: %v\n", err)
-					return nil
-				}
-				switch key {
-				case "redis-ver":
-					value, err := readEncodedString(reader)
-					if err != nil {
-						fmt.Printf("Error reading value: %v\n", err)
-						return nil
-					}
-					fmt.Printf("Aux: %s = %v\n", key, value)
-				case "redis-bits":
-					bits, err := readEncodedInt(reader)
-					if err != nil {
-						fmt.Printf("Error reading bits: %v\n", err)
-						return nil
-					}
-					fmt.Printf("Aux: %s = %v\n", key, bits)
-				case "ctime":
-					ctime, err := readEncodedInt(reader)
-					if err != nil {
-						fmt.Printf("Error reading ctime: %v\n", err)
-						return nil
-					}
-					fmt.Printf("Aux: %s = %v\n", key, ctime)
-				case "used-mem":
-					usedmem, err := readEncodedInt(reader)
-					if err != nil {
-						fmt.Printf("Error reading usedmem: %v\n", err)
-						return nil
-					}
-					fmt.Printf("Aux: %s = %v\n", key, usedmem)
-				case "aof-preamble":
-					size, err := readEncodedInt(reader)
-					if err != nil {
-						fmt.Printf("Error reading size: %v\n", err)
-						return nil
-					}
-					fmt.Printf("Aux: %s = %d\n", key, size)
-				default:
-					fmt.Printf("Unknown auxiliary field: %q\n", key)
-			}
-			case 0xFB: // Hash table sizes for the main keyspace and expires
-				keyspace, err := readEncodedInt(reader)
-				if err != nil {
-					fmt.Printf("Error reading keyspace: %v\n", err)
-					return nil
-				}
-				expires, err := readEncodedInt(reader)
-				if err != nil {
-					fmt.Printf("Error reading expires: %v\n", err)
-					return nil
-				}
-				fmt.Printf("Hash table sizes: keyspace = %d, expires = %d\n", keyspace, expires)
-				startDataRead = true
-			
-			case 0xFE: // Database Selector
-				db, err := readEncodedInt(reader)
-				if err != nil {
-					fmt.Printf("Error reading db: %v\n", err)
-					return nil
-				}
-				fmt.Printf("Database Selector = %d\n", db)
-			
-			case 0xFF: // End of the RDB file
-				eof = true
+		case 0xFA: // Auxiliary fields
+			key, _ := readEncodedString(reader)
+			switch key {
+			case "redis-ver":
+				value, _ := readEncodedString(reader)
+				fmt.Printf("Aux: %s = %v\n", key, value)
+			case "redis-bits":
+				bits, _ := readEncodedInt(reader)
+				fmt.Printf("Aux: %s = %v\n", key, bits)
+			case "ctime":
+				ctime, _ := readEncodedInt(reader)
+				fmt.Printf("Aux: %s = %v\n", key, ctime)
+			case "used-mem":
+				usedmem, _ := readEncodedInt(reader)
+				fmt.Printf("Aux: %s = %v\n", key, usedmem)
+			case "aof-preamble":
+				size, _ := readEncodedInt(reader)
+				// preamble := make([]byte, size)
+				// reader.Read(preamble)
+				fmt.Printf("Aux: %s = %d\n", key, size)
 			default:
-				fmt.Printf("Unknown op code: %d\n", opCode)
+				fmt.Printf("Unknown auxiliary field: %q\n", key)
+			}
+
+		case 0xFB: // Hash table sizes for the main keyspace and expires
+			keyspace, _ := readEncodedInt(reader)
+			expires, _ := readEncodedInt(reader)
+			fmt.Printf("Hash table sizes: keyspace = %d, expires = %d\n", keyspace, expires)
+			startDataRead = true
+
+		case 0xFE: // Database Selector
+			db, _ := readEncodedInt(reader)
+			fmt.Printf("Database Selector = %d\n", db)
+
+		case 0xFF: // End of the RDB file
+			eof = true
+		default:
+			fmt.Printf("Unknown op code: %d\n", opCode)
 		}
 
 		if startDataRead {

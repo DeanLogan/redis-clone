@@ -11,13 +11,19 @@ import (
 	"unicode"
 )
 
-// commandResponse returns a standard OK response.
 func commandResponse() string {
-    return "+OK\r\n"
+    return encodeSimpleString("OK")
 }
 
-// replconfResponse handles the REPLCONF command.
-// It processes the command and returns the appropriate response.
+func typeResponse(cmd []string) string {
+    key := cmd[1]
+    _, ok := store[key]
+    if ok && !isExpired(key){
+        return encodeSimpleString("string")
+    }
+    return encodeSimpleString("none")
+}
+
 func replconfResponse(cmd []string) string {
 	switch strings.ToUpper(cmd[1]) {
 	case "GETACK":
@@ -27,7 +33,7 @@ func replconfResponse(cmd []string) string {
         if cmd[2] == "*"{
             return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(config.ReplOffset-37)}) // subtracted 37 as ReplOffset includes the current command which should not be included in the response
         } else {
-            return "+OK\r\n"
+            return encodeSimpleString("OK")
         }
         case "ACK":
             ackReceived <- true
@@ -36,40 +42,33 @@ func replconfResponse(cmd []string) string {
 		if config.Role != "master" && config.ListeningPort == "" {
 			return errorResponse(fmt.Errorf("invalid replconf command"))
 		}
-		return "+OK\r\n"
+		return encodeSimpleString("OK")
 	case "LISTENING-PORT":
 		if config.Role != "master" && len(cmd) < 2 {
 			return errorResponse(fmt.Errorf("invalid replconf command"))
 		}
 		config.ListeningPort = cmd[2]
-		return "+OK\r\n"
+		return encodeSimpleString("OK")
 	}
     return errorResponse(fmt.Errorf("invalid replconf command"))
 }
 
-// psyncResponse handles the PSYNC command.
-// It processes the command and returns the appropriate response and a boolean indicating if a full resync is required.
 func psyncResponse(cmd []string) (string, bool) {
     if len(cmd) == 3 {
         // TODO: Implement synch
-        return fmt.Sprintf("+FULLRESYNC %s 0\r\n", config.Replid), true
+        return encodeSimpleString(fmt.Sprintf("FULLRESYNC %s 0", config.Replid)), true 
     }
     return "", false
 }
 
-// pingResponse returns a PONG response.
 func pingResponse() string {
-    return "+PONG\r\n"
+    return encodeSimpleString("PONG")
 }
 
-// echoResponse handles the ECHO command.
-// It returns the echoed message.
 func echoResponse(cmd []string) string {
     return encodeBulkString(cmd[1])
 }
 
-// infoResponse handles the INFO command.
-// It returns the server information.
 func infoResponse(cmd []string) string {
     if len(cmd) == 2 && strings.ToUpper(cmd[1]) == "REPLICATION" {
         response := ""
@@ -92,8 +91,6 @@ func infoResponse(cmd []string) string {
     return ""
 }
 
-// setResponse handles the SET command.
-// It sets the value of a key in the store and returns an OK response.
 func setResponse(cmd []string) string {
     key, value := cmd[1], cmd[2]
     store[key] = value
@@ -101,34 +98,32 @@ func setResponse(cmd []string) string {
         expiration, _ := strconv.Atoi(cmd[4])
         ttl[key] = time.Now().Add(time.Millisecond * time.Duration(expiration))
     }
-    return "+OK\r\n"
+    return encodeSimpleString("OK")
 }
 
-// getResponse handles the GET command.
-// It returns the value of a key in the store.
 func getResponse(cmd []string) string {
-    // Check if cmd has at least two elements
-    if len(cmd) < 2 {
-        return encodeBulkString("ERR wrong number of arguments for 'get' command")
-    }
-
+    // TODO: check length
     key := cmd[1]
     value, ok := store[key]
-    if ok {
-        expiration, exists := ttl[key]
-        if !exists || expiration.After(time.Now()) {
-            return encodeBulkString(value)
-        } else if exists {
-            delete(ttl, key)
-            delete(store, key)
-            return encodeBulkString("")
-        }
-    } 
+    if ok && !isExpired(key){
+        return encodeBulkString(value)
+    }
     return encodeBulkString("")
 }
 
-// waitResponse handles the WAIT command.
-// It waits for a specified number of replicas to acknowledge receipt of the write.
+func isExpired(key string) bool {
+    expiration, exists := ttl[key]
+    if !exists {
+        return false
+    }
+    if expiration.Before(time.Now()) {
+        delete(ttl, key)
+        delete(store, key)
+        return true
+    }
+    return false
+}
+
 func waitResponse(cmd []string) string {
     count, err := strconv.Atoi(cmd[1])
     if err != nil {
@@ -174,8 +169,6 @@ func waitResponse(cmd []string) string {
 	return encodeInt(acks)
 }
 
-// configResponse handles the CONFIG command.
-// It processes the command and returns the appropriate response.
 func configResponse(cmd []string) string {
     fmt.Println("configResponse", len(cmd))
     if len(cmd) >= 3 {
@@ -194,27 +187,25 @@ func configResponse(cmd []string) string {
                     return errorResponse(fmt.Errorf("invalid config set command, REPL-ROLE requires a value"))
                 }
                 config.Role = cmd[3]
-                return "+OK\r\n"
+                return encodeSimpleString("OK") 
             case "REPL-ID":
                 if len(cmd) < 4 {
                     return errorResponse(fmt.Errorf("invalid config set command, REPL-ID requires a value"))
                 }
                 config.Replid = cmd[3]
-                return "+OK\r\n"
+                return encodeSimpleString("OK")
             case "REPL-ACK":
                 if len(cmd) < 4 {
                     return errorResponse(fmt.Errorf("invalid config set command, REPL-ACK requires a value"))
                 }
                 config.ReplOffset, _ = strconv.Atoi(cmd[3])
-                return "+OK\r\n"
+                return encodeSimpleString("OK")
             }
         }
     }
     return errorResponse(fmt.Errorf("invalid config set command, invalid number of arguments"))
 }
 
-// keysResponse handles the KEYS command.
-// It returns all keys in the store.
 func keysResponse(cmd []string) string {
     if cmd[1] != "*" {
         return errorResponse(fmt.Errorf("invalid number of arguments"))
@@ -225,7 +216,6 @@ func keysResponse(cmd []string) string {
     return encodeStringArray(keys)
 }
 
-// task sends a command to a replica and waits for the ACK response. Currently not used but has been left here incase it is useful in the future
 func task(wg *sync.WaitGroup, done chan<- struct{}, conn net.Conn, cmd []string) {
     defer wg.Done()
 
@@ -252,12 +242,10 @@ func task(wg *sync.WaitGroup, done chan<- struct{}, conn net.Conn, cmd []string)
     }
 }
 
-// errorResponse formats an error message for a response.
 func errorResponse(err error) string {
 	return fmt.Sprintf("-%s\r\n", err.Error())
 }
 
-// toSnakeCase converts a CamelCase string to snake_case.
 func toSnakeCase(str string) string {
     runes := []rune(str)
     length := len(runes)
