@@ -142,35 +142,134 @@ func readArray(msg string) ([]*RespValue, error) {
 }
 
 func readBooleans(msg string) (bool, error) {
-	return false, errors.New("function not implemented")
+    line, err := readLine(msg)
+    if err != nil {
+        return false, err
+    }
+    switch line {
+    case "t":
+        return true, nil
+    case "f":
+        return false, nil
+    default:
+        return false, errors.New("invalid boolean value")
+    }
 }
 
 func readDouble(msg string) (float64, error) {
-	return 0.0, errors.New("function not implemented")
+    line, err := readLine(msg)
+    if err != nil {
+        return 0.0, err
+    }
+    doubleVal, err := strconv.ParseFloat(line, 64)
+    if err != nil {
+        return 0.0, err
+    }
+    return doubleVal, nil
 }
 
 func readBigNumber(msg string) (int64, error) {
-	return 0, errors.New("function not implemented")
+    line, err := readLine(msg)
+    if err != nil {
+        return 0, err
+    }
+    bigNumberVal, err := strconv.ParseInt(line, 10, 64)
+    if err != nil {
+        return 0, err
+    }
+    return bigNumberVal, nil
 }
 
 func readBulkError(msg string) (string, error) {
-	return "", errors.New("function not implemented")
+    return readLine(msg)
 }
 
 func readVerbatimString(msg string) (string, error) {
-	return "", errors.New("function not implemented")
+    return readLine(msg)
 }
 
 func readMaps(msg string) (map[string]string, error) {
-	return nil, errors.New("function not implemented")
+    sizeStr, err := readLine(msg)
+    if err != nil {
+        return nil, err
+    }
+    mapLen, err := strconv.Atoi(sizeStr)
+    if err != nil {
+        return nil, err
+    }
+
+    resultMap := make(map[string]string)
+    msg = msg[len(sizeStr)+2:] // skip the first line
+
+    for i := 0; i < mapLen; i++ {
+        key, err := readBulkString(msg)
+        if err != nil {
+            return nil, err
+        }
+        msg = msg[len(key)+4:] // skip the key and \r\n
+
+        value, err := readBulkString(msg)
+        if err != nil {
+            return nil, err
+        }
+        msg = msg[len(value)+4:] // skip the value and \r\n
+
+        resultMap[key] = value
+    }
+
+    return resultMap, nil
 }
 
 func readSets(msg string) ([]string, error) {
-	return nil, errors.New("function not implemented")
+    sizeStr, err := readLine(msg)
+    if err != nil {
+        return nil, err
+    }
+    setLen, err := strconv.Atoi(sizeStr)
+    if err != nil {
+        return nil, err
+    }
+
+    resultSet := make([]string, setLen)
+    msg = msg[len(sizeStr)+2:] // skip the first line
+
+    for i := 0; i < setLen; i++ {
+        value, err := readBulkString(msg)
+        if err != nil {
+            return nil, err
+        }
+        msg = msg[len(value)+4:] // skip the value and \r\n
+
+        resultSet[i] = value
+    }
+
+    return resultSet, nil
 }
 
 func readPush(msg string) ([]string, error) {
-	return nil, errors.New("function not implemented")
+    sizeStr, err := readLine(msg)
+    if err != nil {
+        return nil, err
+    }
+    pushLen, err := strconv.Atoi(sizeStr)
+    if err != nil {
+        return nil, err
+    }
+
+    resultPush := make([]string, pushLen)
+    msg = msg[len(sizeStr)+2:] // skip the first line
+
+    for i := 0; i < pushLen; i++ {
+        value, err := readBulkString(msg)
+        if err != nil {
+            return nil, err
+        }
+        msg = msg[len(value)+4:] // skip the value and \r\n
+
+        resultPush[i] = value
+    }
+
+    return resultPush, nil
 }
 
 func isRespType(val byte) bool {
