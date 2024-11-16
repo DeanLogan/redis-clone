@@ -93,7 +93,7 @@ func infoResponse(cmd []string) string {
 
 func setResponse(cmd []string) string {
     key, value := cmd[1], cmd[2]
-    store[key] = value
+    setString(key, value)
     if len(cmd) == 5 && strings.ToUpper(cmd[3]) == "PX" {
         expiration, _ := strconv.Atoi(cmd[4])
         ttl[key] = time.Now().Add(time.Millisecond * time.Duration(expiration))
@@ -106,7 +106,7 @@ func getResponse(cmd []string) string {
     key := cmd[1]
     value, ok := store[key]
     if ok && !isExpired(key){
-        return encodeBulkString(value)
+        return encodeRedisValue(value)
     }
     return encodeBulkString("")
 }

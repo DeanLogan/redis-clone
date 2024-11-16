@@ -31,7 +31,6 @@ type serverConfig struct {
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
-var store = make(map[string]string) 
 var ttl = make(map[string]time.Time)
 var keys = []string{}
 var ackReceived chan bool
@@ -193,32 +192,6 @@ func readCommand(scanner *bufio.Scanner) ([]string, error) {
     fmt.Println(byteLength)
     config.ReplOffset += byteLength
     return cmd, nil
-}
-
-func encodeBulkString(s string) string {
-	if len(s) == 0 {
-		return "$-1\r\n"
-	}
-	return fmt.Sprintf("$%d\r\n%s\r\n", len(s), s)
-}
-
-func encodeSimpleString(s string) string {
-	if len(s) == 0 {
-		return "+\r\n"
-	}
-	return fmt.Sprintf("+%s\r\n", s)
-}
-
-func encodeStringArray(arr []string) string {
-	result := fmt.Sprintf("*%d\r\n", len(arr))
-	for _, s := range arr {
-		result += encodeBulkString(s)
-	}
-	return result
-}
-
-func encodeInt(n int) string {
-	return fmt.Sprintf(":%d\r\n", n)
 }
 
 func handleCommand(cmd []string) (response string, resynch bool) {

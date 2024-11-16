@@ -183,7 +183,7 @@ func readRDB(rdbPath string) error {
 					if expiration.After(now) {
 						ttl[key] = expiration
 					}
-					store[key] = value
+					setString(key, value)
 				}
 			}
 		}
