@@ -1,10 +1,19 @@
 package main
 
-type RedisValue struct {
-    value interface{}
+type StreamEntry struct {
+    ID     string
+    Fields map[string]string
+}
+
+type RedisStream struct {
+    Entries []StreamEntry
 }
 
 var store = make(map[string]RedisValue)
+
+type RedisValue struct {
+    value interface{}
+}
 
 func encodeRedisValue(rv RedisValue) string {
     switch v := rv.value.(type) {
@@ -20,9 +29,41 @@ func encodeRedisValue(rv RedisValue) string {
             set = append(set, k)
         }
         return encodeStringArray(set)
+    case RedisStream:
+        return encodeStream(v)
     default:
         return encodeBulkString("")
     }
+}
+
+func getRedisValueType(rv RedisValue) string {
+    switch rv.value.(type) {
+    case string:
+        return "string"
+    case int:
+        return "int"
+    case []string:
+        return "array"
+    case map[string]struct{}:
+        return "set"
+    case RedisStream:
+        return "stream"
+    default:
+        return "string"
+    }
+}
+
+func setStreamEntry(key, id string, fields map[string]string) {
+    stream, ok := store[key]
+    if !ok {
+        stream = RedisValue{value: RedisStream{Entries: []StreamEntry{}}}
+    }
+    redisStream, ok := stream.value.(RedisStream)
+    if !ok {
+        redisStream = RedisStream{Entries: []StreamEntry{}}
+    }
+    redisStream.Entries = append(redisStream.Entries, StreamEntry{ID: id, Fields: fields})
+    store[key] = RedisValue{value: redisStream}
 }
 
 func setString(key, value string) {
@@ -87,4 +128,13 @@ func getSet(key string) ([]string, bool) {
         set = append(set, k)
     }
     return set, true
+}
+
+func getStream(key string) (RedisStream, bool) {
+    val, ok := store[key]
+    if !ok {
+        return RedisStream{}, false
+    }
+    streamVal, ok := val.value.(RedisStream)
+    return streamVal, ok
 }

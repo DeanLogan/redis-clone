@@ -15,11 +15,28 @@ func commandResponse() string {
     return encodeSimpleString("OK")
 }
 
+func xaddResponse(cmd []string) string {
+    if len(cmd) < 5 || len(cmd)%2 != 1 {
+        return encodeBulkString("ERR wrong number of arguments for 'xadd' command")
+    }
+
+    streamKey := cmd[1]
+    entryID := cmd[2]
+    fields := make(map[string]string)
+
+    for i := 3; i < len(cmd); i += 2 {
+        fields[cmd[i]] = cmd[i+1]
+    }
+
+    setStreamEntry(streamKey, entryID, fields)
+    return encodeBulkString(entryID)
+}
+
 func typeResponse(cmd []string) string {
     key := cmd[1]
-    _, ok := store[key]
+    value, ok := store[key]
     if ok && !isExpired(key){
-        return encodeSimpleString("string")
+        return encodeSimpleString(getRedisValueType(value))
     }
     return encodeSimpleString("none")
 }
