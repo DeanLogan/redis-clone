@@ -35,6 +35,8 @@ var ttl = make(map[string]time.Time)
 var keys = []string{}
 var ackReceived chan bool
 var config serverConfig
+var streamTopMilisecondsTimeForStream int
+var streamTopSequenceNumberForStream int
 
 func main() {
 	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")

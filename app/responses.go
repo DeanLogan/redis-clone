@@ -17,19 +17,67 @@ func commandResponse() string {
 
 func xaddResponse(cmd []string) string {
     if len(cmd) < 5 || len(cmd)%2 != 1 {
-        return encodeBulkString("ERR wrong number of arguments for 'xadd' command")
+        return encodeSimpleErrorResponse("wrong number of arguments for 'xadd' command")
+    }
+    entryId := cmd[2]
+    msg := verifyStreamId(entryId)
+    if msg != "" {
+        return msg
     }
 
     streamKey := cmd[1]
-    entryID := cmd[2]
     fields := make(map[string]string)
 
     for i := 3; i < len(cmd); i += 2 {
         fields[cmd[i]] = cmd[i+1]
     }
 
-    setStreamEntry(streamKey, entryID, fields)
-    return encodeBulkString(entryID)
+    setStreamEntry(streamKey, entryId, fields)
+    return encodeBulkString(entryId)
+}
+
+func verifyStreamId(entryId string) string {
+    milisecondTime, sequenceNumber, err := seperateStreamId(entryId)
+    if err != nil {
+        return encodeSimpleErrorResponse("invalid stream ID given for 'xadd' command, additional info: \n"+err.Error())
+    }
+
+    if milisecondTime < 0 || sequenceNumber <= 0 {
+        return encodeSimpleErrorResponse("The ID specified in XADD must be greater than 0-0")
+    }
+
+    if milisecondTime < streamTopMilisecondsTimeForStream {
+        return encodeSimpleErrorResponse("The ID specified in XADD is equal or smaller than the target stream top item")
+    }
+
+    if sequenceNumber <= streamTopSequenceNumberForStream && milisecondTime == streamTopMilisecondsTimeForStream {
+        return encodeSimpleErrorResponse("The ID specified in XADD is equal or smaller than the target stream top item")
+    }
+
+    // update stream top values
+    streamTopMilisecondsTimeForStream = milisecondTime
+    streamTopSequenceNumberForStream = sequenceNumber
+
+    return ""
+}
+
+// seperate stream ID into milisecondTime and sequenceNumber
+func seperateStreamId(id string) (int, int, error) {
+    index := strings.LastIndex(id, string('-'))
+    if index == -1 {
+        return -1, -1, fmt.Errorf("invalid stream ID")
+    }
+    strTime, strSeqNum := id[:index], id[index+1:]
+
+    milisecondTime, err := strconv.Atoi(strTime)
+    if err != nil {
+        return -1, -1, err
+    }
+    sequenceNumber, err := strconv.Atoi(strSeqNum)
+    if err != nil {
+        return -1, -1, err
+    }
+    return milisecondTime, sequenceNumber, nil
 }
 
 func typeResponse(cmd []string) string {

@@ -47,3 +47,10 @@ func encodeStringMap(m map[string]string) string {
     }
     return result
 }
+
+func encodeSimpleErrorResponse(s string) string{
+	if len(s) == 0 {
+		return "-\r\n"
+	}
+	return fmt.Sprintf("-ERR %s\r\n", s)
+}
