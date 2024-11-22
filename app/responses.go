@@ -19,7 +19,15 @@ func xaddResponse(cmd []string) string {
     if len(cmd) < 5 || len(cmd)%2 != 1 {
         return encodeSimpleErrorResponse("wrong number of arguments for 'xadd' command")
     }
+    
     entryId := cmd[2]
+    if strings.HasSuffix(entryId, "*") {
+        err := generateSequenceNumber(&entryId)
+        if err != nil {
+            return encodeSimpleErrorResponse(err.Error())
+        }
+    }
+
     msg := verifyStreamId(entryId)
     if msg != "" {
         return msg
@@ -36,13 +44,37 @@ func xaddResponse(cmd []string) string {
     return encodeBulkString(entryId)
 }
 
+func generateSequenceNumber(entryId *string) error {
+    if len(*entryId) > 0 {
+        *entryId = (*entryId)[:len(*entryId)-1]
+    }
+
+    milisecondTime, _, err := seperateStreamId(*entryId)
+    if err != nil && err.Error() != "sequenceNumber failed" {
+        return fmt.Errorf("invalid stream ID given for 'xadd' command, additional info: %s", err.Error())
+    }
+
+    currentSequenceNumber, exists := entryIds[milisecondTime]
+    if !exists {
+        if milisecondTime == 0 {
+            *entryId += "1"
+        } else {
+            *entryId += "0"
+        }
+        return nil
+    }
+
+    *entryId += strconv.Itoa(currentSequenceNumber + 1)
+    return nil
+}
+
 func verifyStreamId(entryId string) string {
     milisecondTime, sequenceNumber, err := seperateStreamId(entryId)
     if err != nil {
-        return encodeSimpleErrorResponse("invalid stream ID given for 'xadd' command, additional info: \n"+err.Error())
+        return encodeSimpleErrorResponse("invalid stream ID given for 'xadd' command, additional info: "+err.Error())
     }
 
-    if milisecondTime < 0 || sequenceNumber <= 0 {
+    if milisecondTime <= 0 && sequenceNumber <= 0 {
         return encodeSimpleErrorResponse("The ID specified in XADD must be greater than 0-0")
     }
 
@@ -50,13 +82,14 @@ func verifyStreamId(entryId string) string {
         return encodeSimpleErrorResponse("The ID specified in XADD is equal or smaller than the target stream top item")
     }
 
-    if sequenceNumber <= streamTopSequenceNumberForStream && milisecondTime == streamTopMilisecondsTimeForStream {
+    currentSequenceNumber, exists := entryIds[milisecondTime]
+    if exists && sequenceNumber <= currentSequenceNumber && milisecondTime == streamTopMilisecondsTimeForStream {
         return encodeSimpleErrorResponse("The ID specified in XADD is equal or smaller than the target stream top item")
     }
 
     // update stream top values
     streamTopMilisecondsTimeForStream = milisecondTime
-    streamTopSequenceNumberForStream = sequenceNumber
+    entryIds[milisecondTime] = sequenceNumber
 
     return ""
 }
@@ -71,11 +104,11 @@ func seperateStreamId(id string) (int, int, error) {
 
     milisecondTime, err := strconv.Atoi(strTime)
     if err != nil {
-        return -1, -1, err
+        return -1, -1, fmt.Errorf("milisecond failed")
     }
     sequenceNumber, err := strconv.Atoi(strSeqNum)
     if err != nil {
-        return -1, -1, err
+        return milisecondTime, -1, fmt.Errorf("sequenceNumber failed")
     }
     return milisecondTime, sequenceNumber, nil
 }

@@ -36,7 +36,7 @@ var keys = []string{}
 var ackReceived chan bool
 var config serverConfig
 var streamTopMilisecondsTimeForStream int
-var streamTopSequenceNumberForStream int
+var entryIds = make(map[int]int) // key is milisecondsTime and value is sequenceNumber
 
 func main() {
 	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")
