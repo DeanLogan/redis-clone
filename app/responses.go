@@ -21,6 +21,11 @@ func xaddResponse(cmd []string) string {
     }
     
     entryId := cmd[2]
+
+    if len(entryId) == 1 && entryId[0] == '*' {
+        generateMilisecondTime(&entryId)
+    } 
+
     if strings.HasSuffix(entryId, "*") {
         err := generateSequenceNumber(&entryId)
         if err != nil {
@@ -42,6 +47,11 @@ func xaddResponse(cmd []string) string {
 
     setStreamEntry(streamKey, entryId, fields)
     return encodeBulkString(entryId)
+}
+
+func generateMilisecondTime(entryId *string) {
+    millis := time.Now().UnixNano() / int64(time.Millisecond)
+    *entryId = strconv.FormatInt(millis, 10) + "-*"
 }
 
 func generateSequenceNumber(entryId *string) error {
