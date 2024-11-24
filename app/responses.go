@@ -15,6 +15,34 @@ func commandResponse() string {
     return encodeSimpleString("OK")
 }
 
+func xrangeResponse(cmd []string) string {
+    if len(cmd) != 4 {
+        return encodeSimpleErrorResponse("wrong number of arguments for 'xrange' command")
+    }
+
+    streamKey := cmd[1]
+    startID := cmd[2]
+    endID := cmd[3]
+
+    stream, ok := getStream(streamKey)
+    if !ok {
+        return encodeSimpleErrorResponse("stream not found")
+    }
+
+    var result []StreamEntry
+    for _, entry := range stream.Entries {
+        if isInRange(entry.ID, startID, endID) {
+            result = append(result, entry)
+        }
+    }
+
+    return encodeStream(RedisStream{Entries: result})
+}
+
+func isInRange(entryID, startID, endID string) bool {
+    return (startID == "-" || entryID >= startID) && (endID == "+" || entryID <= endID)
+}
+
 func xaddResponse(cmd []string) string {
     if len(cmd) < 5 || len(cmd)%2 != 1 {
         return encodeSimpleErrorResponse("wrong number of arguments for 'xadd' command")

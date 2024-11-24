@@ -226,6 +226,8 @@ func handleCommand(cmd []string) (response string, resynch bool) {
         response = typeResponse(cmd)
     case "XADD":
         response = xaddResponse(cmd)
+    case "XRANGE":
+        response = xrangeResponse(cmd)
     }
     if isWrite {
         propagate(cmd)
