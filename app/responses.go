@@ -15,6 +15,29 @@ func commandResponse() string {
     return encodeSimpleString("OK")
 }
 
+func xreadResponse(cmd []string) string {
+    if len(cmd) < 4 || len(cmd)%2 != 0 {
+        return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
+    }
+
+    streamKey := cmd[2]
+    startID := cmd[3]
+
+    stream, ok := getStream(streamKey)
+    if !ok {
+        return encodeSimpleErrorResponse("stream not found")
+    }
+
+    var result []StreamEntry
+    for _, entry := range stream.Entries {
+        if entry.ID >= startID {
+            result = append(result, entry)
+        }
+    }
+
+    return encodeXReadResponse(streamKey, result)
+}
+
 func xrangeResponse(cmd []string) string {
     if len(cmd) != 4 {
         return encodeSimpleErrorResponse("wrong number of arguments for 'xrange' command")
@@ -48,6 +71,7 @@ func xaddResponse(cmd []string) string {
         return encodeSimpleErrorResponse("wrong number of arguments for 'xadd' command")
     }
     
+    streamKey := cmd[1]
     entryId := cmd[2]
 
     if len(entryId) == 1 && entryId[0] == '*' {
@@ -66,7 +90,6 @@ func xaddResponse(cmd []string) string {
         return msg
     }
 
-    streamKey := cmd[1]
     fields := make(map[string]string)
 
     for i := 3; i < len(cmd); i += 2 {
