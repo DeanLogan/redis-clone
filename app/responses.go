@@ -22,6 +22,17 @@ func xreadResponse(cmd []string) string {
 
     streamKey := cmd[2]
     startID := cmd[3]
+    count := -1 
+
+    for i := 4; i < len(cmd); i += 2 {
+        if strings.ToUpper(cmd[i]) == "COUNT" {
+            var err error
+            count, err = strconv.Atoi(cmd[i+1])
+            if err != nil {
+                return encodeSimpleErrorResponse("invalid COUNT value")
+            }
+        }
+    }
 
     stream, ok := getStream(streamKey)
     if !ok {
@@ -32,6 +43,9 @@ func xreadResponse(cmd []string) string {
     for _, entry := range stream.Entries {
         if entry.ID >= startID {
             result = append(result, entry)
+            if count > 0 && len(result) >= count {
+                break
+            }
         }
     }
 
