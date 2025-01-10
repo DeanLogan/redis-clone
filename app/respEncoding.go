@@ -39,6 +39,16 @@ func encodeStream(stream RedisStream) string {
     return result
 }
 
+func encodeStreamWithKey(streamKey string, entries []StreamEntry) string {
+    result := fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(streamKey), streamKey)
+    result += fmt.Sprintf("*%d\r\n", len(entries))
+    for _, entry := range entries {
+        result += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.ID), entry.ID)
+        result += encodeStringMap(entry.Fields)
+    }
+    return result
+}
+
 func encodeStringMap(m map[string]string) string {
     result := fmt.Sprintf("*%d\r\n", len(m)*2)
     for k, v := range m {

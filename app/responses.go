@@ -16,40 +16,73 @@ func commandResponse() string {
 }
 
 func xreadResponse(cmd []string) string {
-    if len(cmd) < 4 || len(cmd)%2 != 0 {
+    if len(cmd) < 4 {
         return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
     }
 
-    streamKey := cmd[2]
-    startID := cmd[3]
-    count := -1 
+    count := -1 // Default to no limit
 
-    for i := 4; i < len(cmd); i += 2 {
+    // Parse optional COUNT argument
+    for i := 1; i < len(cmd); i += 2 {
         if strings.ToUpper(cmd[i]) == "COUNT" {
             var err error
             count, err = strconv.Atoi(cmd[i+1])
             if err != nil {
                 return encodeSimpleErrorResponse("invalid COUNT value")
             }
+            cmd = append(cmd[:i], cmd[i+2:]...) // Remove COUNT argument from cmd
+            break
         }
     }
 
-    stream, ok := getStream(streamKey)
-    if !ok {
-        return encodeSimpleErrorResponse("stream not found")
+    if len(cmd) < 4 {
+        return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
     }
 
-    var result []StreamEntry
-    for _, entry := range stream.Entries {
-        if entry.ID >= startID {
-            result = append(result, entry)
-            if count > 0 && len(result) >= count {
-                break
+    // Find the index of "STREAMS" keyword
+    streamsIndex := -1
+    for i, arg := range cmd {
+        if strings.ToUpper(arg) == "STREAMS" {
+            streamsIndex = i
+            break
+        }
+    }
+
+    if streamsIndex == -1 || streamsIndex+1 >= len(cmd) {
+        return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
+    }
+
+    streamKeys := cmd[streamsIndex+1 : streamsIndex+1+(len(cmd)-streamsIndex-1)/2]
+    startIDs := cmd[streamsIndex+1+(len(cmd)-streamsIndex-1)/2:]
+
+    if len(streamKeys) != len(startIDs) {
+        return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
+    }
+
+    var result []string
+    for i, streamKey := range streamKeys {
+        startID := startIDs[i]
+        stream, ok := getStream(streamKey)
+        if !ok {
+            continue
+        }
+
+        var entries []StreamEntry
+        for _, entry := range stream.Entries {
+            if entry.ID >= startID {
+                entries = append(entries, entry)
+                if count > 0 && len(entries) >= count {
+                    break
+                }
             }
         }
+
+        if len(entries) > 0 {
+            result = append(result, encodeStreamWithKey(streamKey, entries))
+        }
     }
 
-    return encodeXReadResponse(streamKey, result)
+    return fmt.Sprintf("*%d\r\n%s", len(result), strings.Join(result, ""))
 }
 
 func xrangeResponse(cmd []string) string {
