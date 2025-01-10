@@ -3,6 +3,7 @@ package main
 type StreamEntry struct {
     ID     string
     Fields map[string]string
+    TimeReceivedAt int64
 }
 
 type RedisStream struct {
@@ -53,7 +54,7 @@ func getRedisValueType(rv RedisValue) string {
     }
 }
 
-func setStreamEntry(key, id string, fields map[string]string) {
+func setStreamEntry(key, id string, fields map[string]string, timeReceivedAt int64) {
     stream, ok := store[key]
     if !ok {
         stream = RedisValue{value: RedisStream{Entries: []StreamEntry{}}}
@@ -62,7 +63,7 @@ func setStreamEntry(key, id string, fields map[string]string) {
     if !ok {
         redisStream = RedisStream{Entries: []StreamEntry{}}
     }
-    redisStream.Entries = append(redisStream.Entries, StreamEntry{ID: id, Fields: fields})
+    redisStream.Entries = append(redisStream.Entries, StreamEntry{ID: id, Fields: fields, TimeReceivedAt: timeReceivedAt})
     store[key] = RedisValue{value: redisStream}
 }
 

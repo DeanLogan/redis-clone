@@ -20,23 +20,9 @@ func xreadResponse(cmd []string) string {
         return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
     }
 
-    count := -1 // Default to no limit
-
-    // Parse optional COUNT argument
-    for i := 1; i < len(cmd); i += 2 {
-        if strings.ToUpper(cmd[i]) == "COUNT" {
-            var err error
-            count, err = strconv.Atoi(cmd[i+1])
-            if err != nil {
-                return encodeSimpleErrorResponse("invalid COUNT value")
-            }
-            cmd = append(cmd[:i], cmd[i+2:]...) // Remove COUNT argument from cmd
-            break
-        }
-    }
-
-    if len(cmd) < 4 {
-        return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
+    cmd, count, blockTime, err := parseOptionalArguments(cmd)
+    if err != nil {
+        return encodeSimpleErrorResponse(err.Error())
     }
 
     // Find the index of "STREAMS" keyword
@@ -82,7 +68,69 @@ func xreadResponse(cmd []string) string {
         }
     }
 
+    if blockTime > 0 {
+        // Get time range for the blocktime
+        currentTime := time.Now().UnixNano() / int64(time.Millisecond)
+        endTime := currentTime + int64(blockTime)
+        
+        // Wait for the block duration
+        time.Sleep(time.Duration(blockTime) * time.Millisecond)
+        
+        result = []string{}
+        var testing string
+        for i, streamKey := range streamKeys {
+            startID := startIDs[i]
+            stream, ok := getStream(streamKey)
+            if !ok {
+                continue
+            }
+
+            var entries []StreamEntry
+            for _, entry := range stream.Entries {
+                testing += strconv.FormatInt(entry.TimeReceivedAt, 10) + " "
+                if entry.ID >= startID && entry.TimeReceivedAt > currentTime && entry.TimeReceivedAt <= endTime {
+                    entries = append(entries, entry)
+                    if count > 0 && len(entries) >= count {
+                        break
+                    }
+                }
+            }
+
+            if len(entries) > 0 {
+                result = append(result, encodeStreamWithKey(streamKey, entries))
+            } else {
+                return encodeBulkString("")
+            }
+        }
+    }
+
     return fmt.Sprintf("*%d\r\n%s", len(result), strings.Join(result, ""))
+}
+
+func parseOptionalArguments(cmd []string) ([]string, int, int, error) {
+    count := -1
+    blockTime := -1
+
+    for i := 1; i < len(cmd); i += 2 {
+        var err error
+        if strings.ToUpper(cmd[i]) == "COUNT" {
+            count, err = strconv.Atoi(cmd[i+1])
+            if err != nil {
+                return cmd, count, blockTime, fmt.Errorf("invalid COUNT value")
+            }
+            cmd = append(cmd[:i], cmd[i+2:]...) // Remove COUNT argument from cmd
+            break
+        } else if strings.ToUpper(cmd[i]) == "BLOCK" {
+            blockTime, err = strconv.Atoi(cmd[i+1])
+            if err != nil {
+                return cmd, count, blockTime, fmt.Errorf("invalid BLOCK value")
+            }
+            cmd = append(cmd[:i], cmd[i+2:]...) // Remove BLOCK argument from cmd
+            break
+        }
+    }
+
+    return cmd, count, blockTime, nil
 }
 
 func xrangeResponse(cmd []string) string {
@@ -143,7 +191,7 @@ func xaddResponse(cmd []string) string {
         fields[cmd[i]] = cmd[i+1]
     }
 
-    setStreamEntry(streamKey, entryId, fields)
+    setStreamEntry(streamKey, entryId, fields, time.Now().UnixNano() / int64(time.Millisecond))
     return encodeBulkString(entryId)
 }
 
