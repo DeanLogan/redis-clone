@@ -68,43 +68,64 @@ func xreadResponse(cmd []string) string {
         }
     }
 
-    if blockTime > 0 {
-        // Get time range for the blocktime
-        currentTime := time.Now().UnixNano() / int64(time.Millisecond)
-        endTime := currentTime + int64(blockTime)
-        
-        // Wait for the block duration
+    if blockTime >= 0 {
+        result = waitForNewEntries(streamKeys, startIDs, count, blockTime)
+    }
+
+    if len(result) == 0 {
+        return encodeBulkString("")
+    }
+    return fmt.Sprintf("*%d\r\n%s", len(result), strings.Join(result, ""))
+}
+
+func waitForNewEntries(streamKeys, startIDs []string, count, blockTime int) []string {
+    var result []string
+
+    currentTime := time.Now().UnixNano() / int64(time.Millisecond)
+    endTime := currentTime + int64(blockTime)
+    if blockTime == 0 {
+        // Block indefinitely until new entries are available
+        for {
+            result = checkForNewEntries(streamKeys, startIDs, count, currentTime, time.Now().UnixNano()+20/int64(time.Millisecond))
+            if len(result) > 0 {
+                break
+            }
+            time.Sleep(100 * time.Millisecond)
+        }
+    } else {        
         time.Sleep(time.Duration(blockTime) * time.Millisecond)
         
-        result = []string{}
-        var testing string
-        for i, streamKey := range streamKeys {
-            startID := startIDs[i]
-            stream, ok := getStream(streamKey)
-            if !ok {
-                continue
-            }
+        result = checkForNewEntries(streamKeys, startIDs, count, currentTime, endTime)
+    }
 
-            var entries []StreamEntry
-            for _, entry := range stream.Entries {
-                testing += strconv.FormatInt(entry.TimeReceivedAt, 10) + " "
-                if entry.ID >= startID && entry.TimeReceivedAt > currentTime && entry.TimeReceivedAt <= endTime {
-                    entries = append(entries, entry)
-                    if count > 0 && len(entries) >= count {
-                        break
-                    }
+    return result
+}
+
+func checkForNewEntries(streamKeys, startIDs []string, count int, currentTime, endTime int64) []string {
+    var result []string
+    for i, streamKey := range streamKeys {
+        startID := startIDs[i]
+        stream, ok := getStream(streamKey)
+        if !ok {
+            continue
+        }
+
+        var entries []StreamEntry
+        for _, entry := range stream.Entries {
+            if entry.ID >= startID && entry.TimeReceivedAt > currentTime && entry.TimeReceivedAt <= endTime {
+                entries = append(entries, entry)
+                if count > 0 && len(entries) >= count {
+                    break
                 }
             }
+        }
 
-            if len(entries) > 0 {
-                result = append(result, encodeStreamWithKey(streamKey, entries))
-            } else {
-                return encodeBulkString("")
-            }
+        if len(entries) > 0 {
+            result = append(result, encodeStreamWithKey(streamKey, entries))
         }
     }
 
-    return fmt.Sprintf("*%d\r\n%s", len(result), strings.Join(result, ""))
+    return result
 }
 
 func parseOptionalArguments(cmd []string) ([]string, int, int, error) {
