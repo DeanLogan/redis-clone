@@ -44,6 +44,18 @@ func xreadResponse(cmd []string) string {
         return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
     }
 
+    for i, startID := range startIDs {
+        if startID == "$" {
+            streamKey := streamKeys[i]
+            stream, ok := getStream(streamKey)
+            if ok && len(stream.Entries) > 0 {
+                startIDs[i] = stream.Entries[len(stream.Entries)-1].ID
+            } else {
+                startIDs[i] = "0-0" // If the stream is empty, start from the beginning
+            }
+        }
+    }
+
     var result []string
     for i, streamKey := range streamKeys {
         startID := startIDs[i]
