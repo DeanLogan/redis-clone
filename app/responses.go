@@ -156,7 +156,7 @@ func typeResponse(cmd []string) string {
     return encodeSimpleString("none")
 }
 
-func replconfResponse(cmd []string) string {
+func replconfResponse(cmd []string, addr string) string {
 	switch strings.ToUpper(cmd[1]) {
 	case "GETACK":
 		if config.Role != "slave" && len(cmd) < 2 {
@@ -167,9 +167,14 @@ func replconfResponse(cmd []string) string {
         } else {
             return encodeSimpleString("OK")
         }
-        case "ACK":
+    case "ACK":
+        ackOffset, _ := strconv.Atoi(cmd[2])
+        // Only update if this connection is a known replica
+        if checkIfAddrIsReplica(addr) {
+            replicaAckOffsets[addr] = ackOffset
             ackReceived <- true
-            return ""
+        }
+        return ""
 	case "CAPA":
 		if config.Role != "master" && config.ListeningPort == "" {
 			return errorResponse(fmt.Errorf("invalid replconf command"))
@@ -252,6 +257,7 @@ func waitResponse(cmd []string) string {
     if err != nil {
         return errorResponse(err)
     }
+
 	fmt.Printf("Wait count=%d timeout=%d\n", count, timeout)
 	propagate([]string{"REPLCONF", "GETACK", "*"})
 
@@ -284,7 +290,10 @@ func waitResponse(cmd []string) string {
             break outer
         }
     }
-
+    // return num of connected replicas if ACK was never sent before WAIT
+    if(acks == 0) {
+        acks = len(config.Replicas)
+    }
 	return encodeInt(acks)
 }
 

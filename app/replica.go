@@ -20,7 +20,7 @@ func handleReplicaConfig() {
 }
 
 func connectToMaster() (net.Conn, *bufio.Reader) {
-    masterConn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", config.ReplicaofHost, config.ReplicaofPort))
+	masterConn, err := net.Dial("tcp", net.JoinHostPort(config.ReplicaofHost, strconv.Itoa(config.ReplicaofPort)))
     if err != nil {
         fmt.Printf("Failed to connect to master %v\n", err)
         os.Exit(1)
@@ -110,7 +110,7 @@ func syncWithMaster(reader *bufio.Reader, masterConn net.Conn) {
 			break
 		}
 		fmt.Printf("[from master] Command = %q\n", cmd)
-		response, _ := handleCommand(cmd)
+		response, _ := handleCommand(cmd, "")
 		fmt.Printf("response = %q\n", response)
 		if strings.ToUpper(cmd[0]) == "REPLCONF" {
 			fmt.Printf("ack = %q\n", cmd)

@@ -8,6 +8,16 @@ import (
 	"unicode"
 )
 
+func checkIfAddrIsReplica(addr string) bool {
+    isReplica := false
+    for _, r := range config.Replicas {
+        if r.RemoteAddr().String() == addr {
+            isReplica = true
+            break
+        }
+    }
+    return isReplica
+}
 
 func toSnakeCase(str string) string {
     runes := []rune(str)

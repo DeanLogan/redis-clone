@@ -27,6 +27,8 @@ type serverConfig struct {
     MasterReplid     string
     Dir              string
     Dbfilename       string
+    WriteOffset     int
+    LastAckedOffset int
 }
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -37,6 +39,7 @@ var ackReceived chan bool
 var config serverConfig
 var streamTopMilisecondsTimeForStream int
 var entryIds = make(map[int]int) // key is milisecondsTime and value is sequenceNumber
+var replicaAckOffsets = make(map[string]int) // key: replica address, value: last acked offset
 
 func main() {
 	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")
@@ -145,7 +148,8 @@ func manageClientConnection(id int, conn net.Conn) {
         }
 
         fmt.Printf("[#%d] Command = %v\n", id, cmd)
-        response, resynch := handleCommand(cmd)
+        addr := conn.RemoteAddr().String()
+        response, resynch := handleCommand(cmd, addr)
 
         bytesSent, err := conn.Write([]byte(response))
         if err != nil {
@@ -196,13 +200,13 @@ func readCommand(scanner *bufio.Scanner) ([]string, error) {
     return cmd, nil
 }
 
-func handleCommand(cmd []string) (response string, resynch bool) {
+func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
     isWrite := false
     switch strings.ToUpper(cmd[0]) {
     case "COMMAND":
         response = commandResponse()
     case "REPLCONF":
-        response = replconfResponse(cmd)
+        response = replconfResponse(cmd, addr)
     case "PSYNC":
         response, resynch = psyncResponse(cmd)
     case "PING":
@@ -225,6 +229,7 @@ func handleCommand(cmd []string) (response string, resynch bool) {
     case "TYPE":
         response = typeResponse(cmd)
     case "XADD":
+        isWrite = true
         response = xaddResponse(cmd)
     case "XRANGE":
         response = xrangeResponse(cmd)
@@ -232,6 +237,7 @@ func handleCommand(cmd []string) (response string, resynch bool) {
         response = xreadResponse(cmd)
     }
     if isWrite {
+        config.WriteOffset++
         propagate(cmd)
     }
     return
