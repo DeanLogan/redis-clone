@@ -75,8 +75,18 @@ func setInt(key string, value int) {
     store[key] = RedisValue{value: value}
 }
 
-func setList(key string, value []string) {
-    store[key] = RedisValue{value: value}
+func setList(key string, value []string) []string {
+    listVal, ok := store[key]
+    if !ok {
+        listVal = RedisValue{value: []string{}}
+    }
+    arr, ok := listVal.value.([]string)
+    if !ok {
+        arr = []string{}
+    }
+    arr = append(arr, value...)
+    store[key] = RedisValue{value: arr}
+    return arr
 }
 
 func setSet(key string, value []string) {
@@ -86,7 +96,6 @@ func setSet(key string, value []string) {
     }
     store[key] = RedisValue{value: set}
 }
-
 
 func getString(key string) (string, bool) {
     val, ok := store[key]

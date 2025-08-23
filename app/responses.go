@@ -238,6 +238,13 @@ func setResponse(cmd []string) string {
     return encodeSimpleString("OK")
 }
 
+func rPushResponse(cmd []string) string {
+    key, valueStr := cmd[1], cmd[2]
+    value :=  []string{valueStr}
+    arr := setList(key, value)
+    return encodeInt(len(arr))
+}
+
 func getResponse(cmd []string) string {
     // TODO: check length
     key := cmd[1]
