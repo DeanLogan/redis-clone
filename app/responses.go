@@ -239,9 +239,9 @@ func setResponse(cmd []string) string {
 }
 
 func rPushResponse(cmd []string) string {
-    key, valueStr := cmd[1], cmd[2]
-    value :=  []string{valueStr}
-    arr := setList(key, value)
+    key := cmd[1]
+    values := cmd[2:]
+    arr := setList(key, values)
     return encodeInt(len(arr))
 }
 
