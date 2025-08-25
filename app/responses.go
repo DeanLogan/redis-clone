@@ -245,6 +245,25 @@ func rPushResponse(cmd []string) string {
     return encodeInt(len(arr))
 }
 
+func lRangeResponse(cmd []string) string {
+    key := cmd[1]
+    arr, ok := getList(key)
+    if !ok {
+        return encodeStringArray([]string{})
+    }
+    startIndx, err1 := strconv.Atoi(cmd[2])
+    stopIndx, err2 := strconv.Atoi(cmd[3])
+    if err1 != nil || err2 != nil || startIndx < 0 || startIndx > stopIndx {
+        return encodeStringArray([]string{})
+    }
+    arrLen := len(arr)-1
+    if stopIndx > arrLen {
+        stopIndx = arrLen
+    }
+    arr = arr[startIndx:stopIndx+1]
+    return encodeStringArray(arr)
+}
+
 func getResponse(cmd []string) string {
     // TODO: check length
     key := cmd[1]
