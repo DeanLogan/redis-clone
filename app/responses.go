@@ -248,18 +248,29 @@ func rPushResponse(cmd []string) string {
 func lRangeResponse(cmd []string) string {
     key := cmd[1]
     arr, ok := getList(key)
+
     if !ok {
         return encodeStringArray([]string{})
     }
+    arrLen := len(arr)-1
+
     startIndx, err1 := strconv.Atoi(cmd[2])
     stopIndx, err2 := strconv.Atoi(cmd[3])
-    if err1 != nil || err2 != nil || startIndx < 0 || startIndx > stopIndx {
+
+    if err1 != nil || err2 != nil {
         return encodeStringArray([]string{})
     }
-    arrLen := len(arr)-1
+
+    startIndx = adjustIndex(startIndx, arrLen)
+    stopIndx = adjustIndex(stopIndx, arrLen)
+
+    if startIndx > stopIndx {
+        return encodeStringArray([]string{})
+    }
     if stopIndx > arrLen {
         stopIndx = arrLen
     }
+
     arr = arr[startIndx:stopIndx+1]
     return encodeStringArray(arr)
 }

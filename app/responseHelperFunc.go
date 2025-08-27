@@ -200,3 +200,10 @@ func parseOptionalArgumentsForXread(cmd []string) ([]string, int, int, error) {
 
     return cmd, count, blockTime, nil
 }
+
+func adjustIndex(indx int, arrLen int) int {
+    if indx < 0 {
+        indx = arrLen+1 + indx
+    }
+    return max(indx, 0)
+}
