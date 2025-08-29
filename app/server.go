@@ -239,6 +239,8 @@ func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
         response = rPushResponse(cmd)
     case "LRANGE":
         response = lRangeResponse(cmd)
+    case "LPUSH":
+        response = lPushResponse(cmd)
     }
     if isWrite {
         config.WriteOffset++

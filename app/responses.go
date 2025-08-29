@@ -241,13 +241,13 @@ func setResponse(cmd []string) string {
 func rPushResponse(cmd []string) string {
     key := cmd[1]
     values := cmd[2:]
-    arr := setList(key, values)
+    arr := setList(key, values, false)
     return encodeInt(len(arr))
 }
 
 func lRangeResponse(cmd []string) string {
     key := cmd[1]
-    arr, ok := getList(key)
+    arr, ok := getList[string](key)
 
     if !ok {
         return encodeStringArray([]string{})
@@ -270,9 +270,16 @@ func lRangeResponse(cmd []string) string {
     if stopIndx > arrLen {
         stopIndx = arrLen
     }
+    
+    return encodeStringArray(arr[startIndx:stopIndx+1])
+}
 
-    arr = arr[startIndx:stopIndx+1]
-    return encodeStringArray(arr)
+func lPushResponse(cmd []string) string {
+    key := cmd[1]
+    values := cmd[2:]
+    reverseSlice(values)
+    arr := setList(key, values, true)
+    return encodeInt(len(arr))
 }
 
 func getResponse(cmd []string) string {

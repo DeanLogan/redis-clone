@@ -75,16 +75,20 @@ func setInt(key string, value int) {
     store[key] = RedisValue{value: value}
 }
 
-func setList(key string, value []string) []string {
+func setList[T any](key string, value []T, prepend bool) []T {
     listVal, ok := store[key]
     if !ok {
-        listVal = RedisValue{value: []string{}}
+        listVal = RedisValue{value: []T{}}
     }
-    arr, ok := listVal.value.([]string)
+    arr, ok := listVal.value.([]T)
     if !ok {
-        arr = []string{}
+        arr = []T{}
     }
-    arr = append(arr, value...)
+    if prepend {
+        arr = append(value, arr...)
+    } else {
+        arr = append(arr, value...)
+    }
     store[key] = RedisValue{value: arr}
     return arr
 }
@@ -115,12 +119,12 @@ func getInt(key string) (int, bool) {
     return intVal, ok
 }
 
-func getList(key string) ([]string, bool) {
+func getList[T any](key string) ([]T, bool) {
     val, ok := store[key]
     if !ok {
         return nil, false
     }
-    listVal, ok := val.value.([]string)
+    listVal, ok := val.value.([]T)
     return listVal, ok
 }
 
