@@ -282,6 +282,19 @@ func lPushResponse(cmd []string) string {
     return encodeInt(len(arr))
 }
 
+func lLenResponse(cmd []string) string {
+    key := cmd[1]
+    val, ok := store[key]
+    if !ok {
+        return encodeInt(0)
+    }
+    v := reflect.ValueOf(val.value)
+    if v.Kind() == reflect.Slice {
+        return encodeInt(v.Len())
+    }
+    return encodeInt(0)
+}
+
 func getResponse(cmd []string) string {
     // TODO: check length
     key := cmd[1]
