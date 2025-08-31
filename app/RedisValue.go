@@ -54,7 +54,7 @@ func getRedisValueType(rv RedisValue) string {
     }
 }
 
-func setStreamEntry(key, id string, fields map[string]string, timeReceivedAt int64) {
+func addStreamEntry(key, id string, fields map[string]string, timeReceivedAt int64) {
     stream, ok := store[key]
     if !ok {
         stream = RedisValue{value: RedisStream{Entries: []StreamEntry{}}}
@@ -75,7 +75,7 @@ func setInt(key string, value int) {
     store[key] = RedisValue{value: value}
 }
 
-func setList[T any](key string, value []T, prepend bool) []T {
+func addToList[T any](key string, value []T, prepend bool) []T {
     listVal, ok := store[key]
     if !ok {
         listVal = RedisValue{value: []T{}}
@@ -91,6 +91,19 @@ func setList[T any](key string, value []T, prepend bool) []T {
     }
     store[key] = RedisValue{value: arr}
     return arr
+}
+
+func removeFromList[T any](key string, list []T, index int) ([]T, T) {
+    var removedVal T
+    if index < 0 || index >= len(list) {
+        return list, removedVal
+    }
+    removedVal = list[index]
+    newSlice := make([]T, len(list))
+    copy(newSlice, list)
+    arr := append(newSlice[:index], newSlice[index+1:]...)
+    store[key] = RedisValue{value: arr}
+    return arr, removedVal
 }
 
 func setSet(key string, value []string) {

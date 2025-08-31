@@ -143,7 +143,7 @@ func xaddResponse(cmd []string) string {
         fields[cmd[i]] = cmd[i+1]
     }
 
-    setStreamEntry(streamKey, entryId, fields, time.Now().UnixNano() / int64(time.Millisecond))
+    addStreamEntry(streamKey, entryId, fields, time.Now().UnixNano() / int64(time.Millisecond))
     return encodeBulkString(entryId)
 }
 
@@ -241,7 +241,7 @@ func setResponse(cmd []string) string {
 func rPushResponse(cmd []string) string {
     key := cmd[1]
     values := cmd[2:]
-    arr := setList(key, values, false)
+    arr := addToList(key, values, false)
     return encodeInt(len(arr))
 }
 
@@ -278,7 +278,7 @@ func lPushResponse(cmd []string) string {
     key := cmd[1]
     values := cmd[2:]
     reverseSlice(values)
-    arr := setList(key, values, true)
+    arr := addToList(key, values, true)
     return encodeInt(len(arr))
 }
 
@@ -293,6 +293,16 @@ func lLenResponse(cmd []string) string {
         return encodeInt(v.Len())
     }
     return encodeInt(0)
+}
+
+func lPopResponse(cmd []string) string {
+    key := cmd[1]
+    arr, ok := getList[string](key)
+    if !ok {
+        return encodeBulkString("-1") // null bulk string
+    }
+    _, val := removeFromList(key, arr, 0)
+    return encodeBulkString(val)
 }
 
 func getResponse(cmd []string) string {
