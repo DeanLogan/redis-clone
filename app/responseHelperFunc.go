@@ -213,3 +213,23 @@ func reverseSlice[T any](s []T) {
         s[i], s[j] = s[j], s[i]
     }
 }
+
+func parseRangeIndices(cmd []string, arrLen int) (int, int, bool) {
+    startIndx, err1 := strconv.Atoi(cmd[2])
+    stopIndx, err2 := strconv.Atoi(cmd[3])
+
+    if err1 != nil || err2 != nil {
+        return 0, 0, false
+    }
+
+    startIndx = adjustIndex(startIndx, arrLen)
+    stopIndx = adjustIndex(stopIndx, arrLen)
+
+    if startIndx > stopIndx {
+        return 0, 0, false
+    }
+    if stopIndx > arrLen {
+        stopIndx = arrLen
+    }
+    return startIndx, stopIndx, true
+}

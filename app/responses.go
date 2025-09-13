@@ -252,23 +252,12 @@ func lRangeResponse(cmd []string) string {
     if !ok {
         return encodeStringArray([]string{})
     }
+
     arrLen := len(arr)-1
+    startIndx, stopIndx, valid := parseRangeIndices(cmd, arrLen)
 
-    startIndx, err1 := strconv.Atoi(cmd[2])
-    stopIndx, err2 := strconv.Atoi(cmd[3])
-
-    if err1 != nil || err2 != nil {
+    if !valid {
         return encodeStringArray([]string{})
-    }
-
-    startIndx = adjustIndex(startIndx, arrLen)
-    stopIndx = adjustIndex(stopIndx, arrLen)
-
-    if startIndx > stopIndx {
-        return encodeStringArray([]string{})
-    }
-    if stopIndx > arrLen {
-        stopIndx = arrLen
     }
     
     return encodeStringArray(arr[startIndx:stopIndx+1])
@@ -298,11 +287,31 @@ func lLenResponse(cmd []string) string {
 func lPopResponse(cmd []string) string {
     key := cmd[1]
     arr, ok := getList[string](key)
+    
     if !ok {
         return encodeBulkString("-1") // null bulk string
     }
-    _, val := removeFromList(key, arr, 0)
-    return encodeBulkString(val)
+
+    // returns bulk string if no optional command is given
+    if len(cmd) <= 2 {
+        _, val := removeFromList(key, arr, 0)
+        return encodeBulkString(val)
+    }
+
+    removeFromEndStr := cmd[2]
+
+    removeFromEnd, err := strconv.Atoi(removeFromEndStr)
+    if err != nil || removeFromEnd > len(arr) {
+        return encodeStringArray(arr)
+    }
+    
+    valsPopped := []string{}
+    var val string
+    for i := 0; i<removeFromEnd; i++ {
+        arr, val = removeFromList(key, arr, 0)
+        valsPopped = append(valsPopped, val)
+    }
+    return encodeStringArray(valsPopped)
 }
 
 func getResponse(cmd []string) string {
