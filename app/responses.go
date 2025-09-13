@@ -287,7 +287,6 @@ func lLenResponse(cmd []string) string {
 func lPopResponse(cmd []string) string {
     key := cmd[1]
     arr, ok := getList[string](key)
-    
     if !ok {
         return encodeBulkString("-1") // null bulk string
     }
@@ -312,6 +311,21 @@ func lPopResponse(cmd []string) string {
         valsPopped = append(valsPopped, val)
     }
     return encodeStringArray(valsPopped)
+}
+
+func bLPopResponse(cmd []string, addr string) string {
+    key := cmd[1]
+    
+    blockClient := blockingClient{addr, make(chan struct{})}
+    addBlockingClient(key, blockClient)
+
+    <-blockClient.notify
+
+    arr, _ := getList[string](key)
+    removeBlockingClient(key, addr)
+    _, val := removeFromList(key, arr, 0)
+    returnArr := []string{key, val}
+    return encodeStringArray(returnArr)
 }
 
 func getResponse(cmd []string) string {

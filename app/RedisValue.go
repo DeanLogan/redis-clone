@@ -75,31 +75,37 @@ func setInt(key string, value int) {
     store[key] = RedisValue{value: value}
 }
 
-func addToList[T any](key string, value []T, prepend bool) []T {
+func addToList(key string, value []string, prepend bool) []string {
     listVal, ok := store[key]
     if !ok {
-        listVal = RedisValue{value: []T{}}
+        listVal = RedisValue{value: []string{}}
     }
-    arr, ok := listVal.value.([]T)
+    arr, ok := listVal.value.([]string)
     if !ok {
-        arr = []T{}
+        arr = []string{}
     }
     if prepend {
         arr = append(value, arr...)
     } else {
         arr = append(arr, value...)
     }
+    
+    client, ok := popBlockingClient(key)
+    if ok {
+        client.notify <- struct{}{}
+    }
+    
     store[key] = RedisValue{value: arr}
     return arr
 }
 
-func removeFromList[T any](key string, list []T, index int) ([]T, T) {
-    var removedVal T
+func removeFromList(key string, list []string, index int) ([]string, string) {
+    var removedVal string
     if index < 0 || index >= len(list) {
         return list, removedVal
     }
     removedVal = list[index]
-    newSlice := make([]T, len(list))
+    newSlice := make([]string, len(list))
     copy(newSlice, list)
     arr := append(newSlice[:index], newSlice[index+1:]...)
     store[key] = RedisValue{value: arr}
