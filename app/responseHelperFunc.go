@@ -233,3 +233,10 @@ func parseRangeIndices(cmd []string, arrLen int) (int, int, bool) {
     }
     return startIndx, stopIndx, true
 }
+
+func handleBlockingPop(key string, addr string) []string {
+    arr, _ := getList[string](key)
+    removeBlockingClient(key, addr)
+    _, val := removeFromList(key, arr, 0)
+    return []string{key, val}
+}

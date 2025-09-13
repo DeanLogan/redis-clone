@@ -315,17 +315,31 @@ func lPopResponse(cmd []string) string {
 
 func bLPopResponse(cmd []string, addr string) string {
     key := cmd[1]
+    timoutStr := cmd[2]
+    timeout, err := strconv.ParseFloat(timoutStr, 64)
+    if err != nil {
+        return "$-1\r\n"
+    }
     
     blockClient := blockingClient{addr, make(chan struct{})}
     addBlockingClient(key, blockClient)
+    if timeout == 0 {
+        <-blockClient.notify
+        arr := handleBlockingPop(key, addr)
+        return encodeStringArray(arr)
+    }
 
-    <-blockClient.notify
-
-    arr, _ := getList[string](key)
-    removeBlockingClient(key, addr)
-    _, val := removeFromList(key, arr, 0)
-    returnArr := []string{key, val}
-    return encodeStringArray(returnArr)
+    experationTime := time.Now().Add(time.Duration(timeout * float64(time.Second)))
+    timeoutChan := time.After(time.Until(experationTime))
+    
+    select {
+    case <-blockClient.notify:
+        arr := handleBlockingPop(key, addr)
+        return encodeStringArray(arr)
+    case <-timeoutChan:
+        removeBlockingClient(key, addr)
+        return "$-1\r\n"
+    }
 }
 
 func getResponse(cmd []string) string {
