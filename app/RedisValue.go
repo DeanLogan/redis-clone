@@ -3,7 +3,6 @@ package main
 type StreamEntry struct {
     ID     string
     Fields map[string]string
-    TimeReceivedAt int64
 }
 
 type RedisStream struct {
@@ -54,7 +53,7 @@ func getRedisValueType(rv RedisValue) string {
     }
 }
 
-func addStreamEntry(key, id string, fields map[string]string, timeReceivedAt int64) {
+func addStreamEntry(key, id string, fields map[string]string) {
     stream, ok := store[key]
     if !ok {
         stream = RedisValue{value: RedisStream{Entries: []StreamEntry{}}}
@@ -63,7 +62,13 @@ func addStreamEntry(key, id string, fields map[string]string, timeReceivedAt int
     if !ok {
         redisStream = RedisStream{Entries: []StreamEntry{}}
     }
-    redisStream.Entries = append(redisStream.Entries, StreamEntry{ID: id, Fields: fields, TimeReceivedAt: timeReceivedAt})
+    redisStream.Entries = append(redisStream.Entries, StreamEntry{ID: id, Fields: fields})
+
+    client, ok := popBlockingClient(key, blockingQueueForXread)
+    if ok {
+        client.notify <- struct{}{}
+    }
+
     store[key] = RedisValue{value: redisStream}
 }
 
@@ -90,7 +95,7 @@ func addToList(key string, value []string, prepend bool) []string {
         arr = append(arr, value...)
     }
     
-    client, ok := popBlockingClient(key)
+    client, ok := popBlockingClient(key, blockingQueueForBlop)
     if ok {
         client.notify <- struct{}{}
     }

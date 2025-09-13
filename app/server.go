@@ -234,7 +234,7 @@ func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
     case "XRANGE":
         response = xrangeResponse(cmd)
     case "XREAD":
-        response = xreadResponse(cmd)
+        response = xreadResponse(cmd, addr)
     case "RPUSH":
         response = rPushResponse(cmd)
     case "LRANGE":

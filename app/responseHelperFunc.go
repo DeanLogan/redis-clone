@@ -125,30 +125,75 @@ func isInRange(entryID, startID, endID string) bool {
     return (startID == "-" || entryID >= startID) && (endID == "+" || entryID <= endID)
 }
 
-func waitForNewEntries(streamKeys, startIDs []string, count, blockTime int) []string {
-    var result []string
-
-    currentTime := time.Now().UnixNano() / int64(time.Millisecond)
-    endTime := currentTime + int64(blockTime)
-    if blockTime == 0 {
-        // Block indefinitely until new entries are available
-        for {
-            result = checkForNewEntries(streamKeys, startIDs, count, currentTime, time.Now().UnixNano()+20/int64(time.Millisecond))
-            if len(result) > 0 {
-                break
+// Parses optional arguments like COUNT and BLOCK, returns cleaned command, count, blockTime, error
+func parseXreadArguments(cmd []string) ([]string, int, int, error) {
+    count := -1
+    blockTime := -1
+    cleaned := []string{}
+    i := 0
+    for i < len(cmd) {
+        arg := strings.ToUpper(cmd[i])
+        if arg == "COUNT" && i+1 < len(cmd) {
+            c, err := strconv.Atoi(cmd[i+1])
+            if err != nil {
+                return nil, -1, -1, fmt.Errorf("invalid COUNT value")
             }
-            time.Sleep(100 * time.Millisecond)
+            count = c
+            i += 2
+        } else if arg == "BLOCK" && i+1 < len(cmd) {
+            b, err := strconv.Atoi(cmd[i+1])
+            if err != nil {
+                return nil, -1, -1, fmt.Errorf("invalid BLOCK value")
+            }
+            blockTime = b
+            i += 2
+        } else {
+            cleaned = append(cleaned, cmd[i])
+            i++
         }
-    } else {        
-        time.Sleep(time.Duration(blockTime) * time.Millisecond)
-        
-        result = checkForNewEntries(streamKeys, startIDs, count, currentTime, endTime)
     }
-
-    return result
+    return cleaned, count, blockTime, nil
 }
 
-func checkForNewEntries(streamKeys, startIDs []string, count int, currentTime, endTime int64) []string {
+func findStreamsIndex(cmd []string) int {
+    for i, arg := range cmd {
+        if strings.ToUpper(arg) == "STREAMS" {
+            return i
+        }
+    }
+    return -1
+}
+
+// Extracts stream keys and start IDs from the command
+func extractStreamKeysAndIDs(cmd []string) ([]string, []string, error) {
+    streamsIndex := findStreamsIndex(cmd)
+    if streamsIndex == -1 || streamsIndex+1 >= len(cmd) {
+        return nil, nil, fmt.Errorf("wrong number of arguments for 'xread' command")
+    }
+    n := (len(cmd) - streamsIndex - 1) / 2
+    streamKeys := cmd[streamsIndex+1 : streamsIndex+1+n]
+    startIDs := cmd[streamsIndex+1+n:]
+    if len(streamKeys) != len(startIDs) {
+        return nil, nil, fmt.Errorf("wrong number of arguments for 'xread' command")
+    }
+    return streamKeys, startIDs, nil
+}
+
+func normaliseStartIDs(streamKeys, startIDs []string) {
+    for i, startID := range startIDs {
+        if startID == "$" {
+            streamKey := streamKeys[i]
+            stream, ok := getStream(streamKey)
+            if ok && len(stream.Entries) > 0 {
+                startIDs[i] = stream.Entries[len(stream.Entries)-1].ID
+            } else {
+                startIDs[i] = "0-0"
+            }
+        }
+    }
+}
+
+func fetchStreamEntries(streamKeys, startIDs []string, count int) []string {
     var result []string
     for i, streamKey := range streamKeys {
         startID := startIDs[i]
@@ -156,49 +201,48 @@ func checkForNewEntries(streamKeys, startIDs []string, count int, currentTime, e
         if !ok {
             continue
         }
-
         var entries []StreamEntry
         for _, entry := range stream.Entries {
-            if entry.ID >= startID && entry.TimeReceivedAt > currentTime && entry.TimeReceivedAt <= endTime {
+            if entry.ID > startID {
                 entries = append(entries, entry)
                 if count > 0 && len(entries) >= count {
                     break
                 }
             }
         }
-
         if len(entries) > 0 {
             result = append(result, encodeStreamWithKey(streamKey, entries))
         }
     }
-
     return result
 }
 
-func parseOptionalArgumentsForXread(cmd []string) ([]string, int, int, error) {
-    count := -1
-    blockTime := -1
+func waitForNewStreamEntries(streamKeys []string, blockTime int, startIDs []string, count int, addr string) []string {
+    key := streamKeys[0]
+    var entries []string
+    blockClient := blockingClient{addr, make(chan struct{})}
+    addBlockingClient(key, blockClient, blockingQueueForXread)
 
-    for i := 1; i < len(cmd); i += 2 {
-        var err error
-        if strings.ToUpper(cmd[i]) == "COUNT" {
-            count, err = strconv.Atoi(cmd[i+1])
-            if err != nil {
-                return cmd, count, blockTime, fmt.Errorf("invalid COUNT value")
-            }
-            cmd = append(cmd[:i], cmd[i+2:]...) // Remove COUNT argument from cmd
-            break
-        } else if strings.ToUpper(cmd[i]) == "BLOCK" {
-            blockTime, err = strconv.Atoi(cmd[i+1])
-            if err != nil {
-                return cmd, count, blockTime, fmt.Errorf("invalid BLOCK value")
-            }
-            cmd = append(cmd[:i], cmd[i+2:]...) // Remove BLOCK argument from cmd
-            break
+    if blockTime == 0 {
+        // Block forever until notified
+        <-blockClient.notify
+        removeBlockingClient(key, addr, blockingQueueForXread)
+        entries = fetchStreamEntries(streamKeys, startIDs, count)
+    } else if blockTime > 0 {
+        // waits depending on the block time which is measured in ms
+        experationTime := time.Now().Add(time.Duration(blockTime * int(time.Millisecond)))
+        timeoutChan := time.After(time.Until(experationTime))
+
+        select {
+        case <-blockClient.notify:
+            removeBlockingClient(key, addr, blockingQueueForXread)
+            entries = fetchStreamEntries(streamKeys, startIDs, count)
+        case <-timeoutChan:
+            removeBlockingClient(key, addr, blockingQueueForXread)
+            return nil 
         }
     }
-
-    return cmd, count, blockTime, nil
+    return entries
 }
 
 func adjustIndex(indx int, arrLen int) int {
@@ -236,7 +280,7 @@ func parseRangeIndices(cmd []string, arrLen int) (int, int, bool) {
 
 func handleBlockingPop(key string, addr string) []string {
     arr, _ := getList[string](key)
-    removeBlockingClient(key, addr)
+    removeBlockingClient(key, addr, blockingQueueForBlop)
     _, val := removeFromList(key, arr, 0)
     return []string{key, val}
 }

@@ -5,27 +5,29 @@ type blockingClient struct {
     notify chan struct{}  // channel to notify when the client is no longer blocked (string to send the value that was pushed)
 }
 
-var blockingQueueForBlop = make(map[string][]blockingClient) // key: list name, value: queue of clients
+// key: key for the value awaiting a response, value: queue of clients
+var blockingQueueForBlop = make(map[string][]blockingClient)
+var blockingQueueForXread = make(map[string][]blockingClient) 
 
-func addBlockingClient(listKey string, client blockingClient) {
-    blockingQueueForBlop[listKey] = append(blockingQueueForBlop[listKey], client)
+func addBlockingClient(listKey string, client blockingClient, queueMap map[string][]blockingClient) {
+    queueMap[listKey] = append(queueMap[listKey], client)
 }
 
-func popBlockingClient(listKey string) (blockingClient, bool) {
-    queue := blockingQueueForBlop[listKey]
+func popBlockingClient(listKey string, queueMap map[string][]blockingClient) (blockingClient, bool) {
+    queue := queueMap[listKey]
     if len(queue) == 0 {
         return blockingClient{}, false
     }
     client := queue[0]
-    blockingQueueForBlop[listKey] = queue[1:]
+    queueMap[listKey] = queue[1:]
     return client, true
 }
 
-func removeBlockingClient(listKey string, addr string) {
-    queue := blockingQueueForBlop[listKey]
+func removeBlockingClient(listKey string, addr string, queueMap map[string][]blockingClient) {
+    queue := queueMap[listKey]
     for i, client := range queue {
         if client.addr == addr {
-            blockingQueueForBlop[listKey] = append(queue[:i], queue[i+1:]...)
+            queueMap[listKey] = append(queue[:i], queue[i+1:]...)
             break
         }
     }

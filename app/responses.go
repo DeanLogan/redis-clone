@@ -14,103 +14,28 @@ func commandResponse() string {
     return encodeSimpleString("OK")
 }
 
-func xreadResponse(cmd []string) string {
-    if len(cmd) < 4 {
-        return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
-    }
-
-    cmd, count, blockTime, err := parseOptionalArgumentsForXread(cmd)
+func xreadResponse(cmd []string, addr string) string {
+    parsedCmd, count, blockTime, err := parseXreadArguments(cmd)
     if err != nil {
         return encodeSimpleErrorResponse(err.Error())
     }
 
-    // Find the index of "STREAMS" keyword
-    streamsIndex := -1
-    for i, arg := range cmd {
-        if strings.ToUpper(arg) == "STREAMS" {
-            streamsIndex = i
-            break
-        }
+    streamKeys, startIDs, err := extractStreamKeysAndIDs(parsedCmd)
+    if err != nil {
+        return encodeSimpleErrorResponse(err.Error())
     }
 
-    if streamsIndex == -1 || streamsIndex+1 >= len(cmd) {
-        return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
+    normaliseStartIDs(streamKeys, startIDs)
+
+    entries := fetchStreamEntries(streamKeys, startIDs, count)
+    if len(entries) == 0 && blockTime >= 0 {
+        entries = waitForNewStreamEntries(streamKeys, blockTime, startIDs, count, addr)
     }
-
-    streamKeys := cmd[streamsIndex+1 : streamsIndex+1+(len(cmd)-streamsIndex-1)/2]
-    startIDs := cmd[streamsIndex+1+(len(cmd)-streamsIndex-1)/2:]
-
-    if len(streamKeys) != len(startIDs) {
-        return encodeSimpleErrorResponse("wrong number of arguments for 'xread' command")
+    
+    if entries == nil {
+        return encodeBulkString("") // returns null as bulk string (-1)
     }
-
-    for i, startID := range startIDs {
-        if startID == "$" {
-            streamKey := streamKeys[i]
-            stream, ok := getStream(streamKey)
-            if ok && len(stream.Entries) > 0 {
-                startIDs[i] = stream.Entries[len(stream.Entries)-1].ID
-            } else {
-                startIDs[i] = "0-0" // If the stream is empty, start from the beginning
-            }
-        }
-    }
-
-    var result []string
-    for i, streamKey := range streamKeys {
-        startID := startIDs[i]
-        stream, ok := getStream(streamKey)
-        if !ok {
-            continue
-        }
-
-        var entries []StreamEntry
-        for _, entry := range stream.Entries {
-            if entry.ID >= startID {
-                entries = append(entries, entry)
-                if count > 0 && len(entries) >= count {
-                    break
-                }
-            }
-        }
-
-        if len(entries) > 0 {
-            result = append(result, encodeStreamWithKey(streamKey, entries))
-        }
-    }
-
-    if blockTime >= 0 {
-        result = waitForNewEntries(streamKeys, startIDs, count, blockTime)
-    }
-
-    if len(result) == 0 {
-        return encodeBulkString("")
-    }
-    return fmt.Sprintf("*%d\r\n%s", len(result), strings.Join(result, ""))
-}
-
-func xrangeResponse(cmd []string) string {
-    if len(cmd) != 4 {
-        return encodeSimpleErrorResponse("wrong number of arguments for 'xrange' command")
-    }
-
-    streamKey := cmd[1]
-    startID := cmd[2]
-    endID := cmd[3]
-
-    stream, ok := getStream(streamKey)
-    if !ok {
-        return encodeSimpleErrorResponse("stream not found")
-    }
-
-    var result []StreamEntry
-    for _, entry := range stream.Entries {
-        if isInRange(entry.ID, startID, endID) {
-            result = append(result, entry)
-        }
-    }
-
-    return encodeStream(RedisStream{Entries: result})
+    return encodeStreamArray(entries)
 }
 
 func xaddResponse(cmd []string) string {
@@ -143,8 +68,32 @@ func xaddResponse(cmd []string) string {
         fields[cmd[i]] = cmd[i+1]
     }
 
-    addStreamEntry(streamKey, entryId, fields, time.Now().UnixNano() / int64(time.Millisecond))
+    addStreamEntry(streamKey, entryId, fields)
     return encodeBulkString(entryId)
+}
+
+func xrangeResponse(cmd []string) string {
+    if len(cmd) != 4 {
+        return encodeSimpleErrorResponse("wrong number of arguments for 'xrange' command")
+    }
+
+    streamKey := cmd[1]
+    startID := cmd[2]
+    endID := cmd[3]
+
+    stream, ok := getStream(streamKey)
+    if !ok {
+        return encodeSimpleErrorResponse("stream not found")
+    }
+
+    var result []StreamEntry
+    for _, entry := range stream.Entries {
+        if isInRange(entry.ID, startID, endID) {
+            result = append(result, entry)
+        }
+    }
+
+    return encodeStream(RedisStream{Entries: result})
 }
 
 func typeResponse(cmd []string) string {
@@ -288,7 +237,7 @@ func lPopResponse(cmd []string) string {
     key := cmd[1]
     arr, ok := getList[string](key)
     if !ok {
-        return encodeBulkString("-1") // null bulk string
+        return encodeBulkString("") // null bulk string
     }
 
     // returns bulk string if no optional command is given
@@ -322,7 +271,7 @@ func bLPopResponse(cmd []string, addr string) string {
     }
     
     blockClient := blockingClient{addr, make(chan struct{})}
-    addBlockingClient(key, blockClient)
+    addBlockingClient(key, blockClient, blockingQueueForBlop)
     if timeout == 0 {
         <-blockClient.notify
         arr := handleBlockingPop(key, addr)
@@ -337,7 +286,7 @@ func bLPopResponse(cmd []string, addr string) string {
         arr := handleBlockingPop(key, addr)
         return encodeStringArray(arr)
     case <-timeoutChan:
-        removeBlockingClient(key, addr)
+        removeBlockingClient(key, addr, blockingQueueForBlop)
         return "$-1\r\n"
     }
 }

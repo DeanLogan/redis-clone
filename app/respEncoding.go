@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+    "strings"
 )
 
 func encodeBulkString(s string) string {
@@ -58,19 +59,16 @@ func encodeStringMap(m map[string]string) string {
     return result
 }
 
-func encodeXReadResponse(streamKey string, entries []StreamEntry) string {
-    result := fmt.Sprintf("*1\r\n*2\r\n$%d\r\n%s\r\n", len(streamKey), streamKey)
-    result += fmt.Sprintf("*%d\r\n", len(entries))
-    for _, entry := range entries {
-        result += fmt.Sprintf("*2\r\n$%d\r\n%s\r\n", len(entry.ID), entry.ID)
-        result += encodeStringMap(entry.Fields)
-    }
-    return result
-}
-
 func encodeSimpleErrorResponse(s string) string{
 	if len(s) == 0 {
 		return "-\r\n"
 	}
 	return fmt.Sprintf("-ERR %s\r\n", s)
+}
+
+func encodeStreamArray(entries []string) string {
+    if len(entries) == 0 {
+        return encodeBulkString("")
+    }
+    return fmt.Sprintf("*%d\r\n%s", len(entries), strings.Join(entries, ""))
 }
