@@ -222,7 +222,12 @@ func waitForNewStreamEntries(streamKeys []string, blockTime int, startIDs []stri
     var entries []string
     blockClient := blockingClient{addr, make(chan struct{})}
     addBlockingClient(key, blockClient, blockingQueueForXread)
-
+    fmt.Println(streamKeys)
+    fmt.Println(key)
+    fmt.Println(blockTime)
+    fmt.Println(startIDs)
+    fmt.Println(count)
+    fmt.Println(addr)
     if blockTime == 0 {
         // Block forever until notified
         <-blockClient.notify

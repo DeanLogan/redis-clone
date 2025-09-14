@@ -168,35 +168,30 @@ func manageClientConnection(id int, conn net.Conn) {
 
 func readCommand(scanner *bufio.Scanner) ([]string, error) {
     cmd := []string{}
-    var arrSize, strSize, byteLength int
+    var arrSize int
     for scanner.Scan() {
         token := scanner.Text()
-        byteLength = len(token) + byteLength + 2
+        if len(token) == 0 {
+            continue
+        }
         switch token[0] {
         case '*':
-            if len(token) != 1 {
-                arrSize, _ = strconv.Atoi(token[1:])
-            } else {
-                arrSize--
-                strSize = 0
-                cmd = append(cmd, token)
-            }
+            arrSize, _ = strconv.Atoi(token[1:])
         case '$':
-            strSize, _ = strconv.Atoi(token[1:])
-        default:
-            if len(token) != strSize {
-                return nil, fmt.Errorf("wrong string size - got: %d, want: %d", len(token), strSize)
+            if !scanner.Scan() {
+                return nil, fmt.Errorf("unexpected end of input after $")
             }
+            strToken := scanner.Text()
+            cmd = append(cmd, strToken)
             arrSize--
-            strSize = 0
+        default:
             cmd = append(cmd, token)
+            arrSize--
         }
         if arrSize == 0 {
             break
         }
     }
-    fmt.Println(byteLength)
-    config.ReplOffset += byteLength
     return cmd, nil
 }
 
