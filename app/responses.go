@@ -417,3 +417,19 @@ func multiResponse(addr string) string {
     }
     return encodeSimpleString("OK")
 }
+
+func execResponse(addr string) string {
+    commands, ok := queuedCommands[addr]
+    if !ok {
+        return encodeSimpleErrorResponse("EXEC without MULTI")
+    }
+    var results []string
+
+    delete(queuedCommands, addr)
+    for _, cmd := range commands {
+        fmt.Println(cmd)
+        response, _ := handleCommand(cmd, addr)
+        results = append(results, response)
+    }
+    return encodeRespValuesArray(results)
+}

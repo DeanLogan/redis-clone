@@ -74,12 +74,13 @@ func addToList(key string, value []string, prepend bool) []string {
         arr = append(arr, value...)
     }
     
+    store[key] = RedisValue{value: arr}
+    
     client, ok := popBlockingClient(key, blockingQueueForBlop)
     if ok {
         client.notify <- struct{}{}
     }
     
-    store[key] = RedisValue{value: arr}
     return arr
 }
 

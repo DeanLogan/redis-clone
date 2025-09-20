@@ -27,6 +27,14 @@ func encodeStringArray(arr []string) string {
 	return result
 }
 
+func encodeRespValuesArray(arr []string) string {
+	result := fmt.Sprintf("*%d\r\n", len(arr))
+	for _, s := range arr {
+		result += s
+	}
+	return result
+}
+
 func encodeInt(n int) string {
 	return fmt.Sprintf(":%d\r\n", n)
 }

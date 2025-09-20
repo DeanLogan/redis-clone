@@ -197,17 +197,20 @@ func readCommand(scanner *bufio.Scanner) ([]string, error) {
 }
 
 func isInMulti(addr string) bool {
-    cmds, ok := queuedCommands[addr]
-    return ok && len(cmds) > 0
+    _, ok := queuedCommands[addr]
+    return ok
 }
 
 func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
-    if isInMulti(addr) {
+    command := strings.ToUpper(cmd[0])
+    if isInMulti(addr) && command != "EXEC" && command != "MULTI" && command != "DISCARD" {
+        fmt.Println("ok what has happened")
         queuedCommands[addr] = append(queuedCommands[addr], cmd)
+        return encodeSimpleString("QUEUED"), false
     }
 
     isWrite := false
-    switch strings.ToUpper(cmd[0]) {
+    switch command {
     case "COMMAND":
         response = commandResponse()
     case "REPLCONF":
@@ -256,6 +259,8 @@ func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
         response = incrResponse(cmd)
     case "MULTI":
         response  = multiResponse(addr)
+    case "EXEC":
+        response  = execResponse(addr)
     }
     if isWrite {
         config.WriteOffset++
