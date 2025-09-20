@@ -41,6 +41,7 @@ var streamTopMilisecondsTimeForStream int
 var entryIds = make(map[int]int) // key is milisecondsTime and value is sequenceNumber
 var replicaAckOffsets = make(map[string]int) // key: replica address, value: last acked offset
 var queuedCommands = make(map[string][][]string)
+var channelSubscribers = make(map[string][]string)
 
 func main() {
 	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")
@@ -262,6 +263,8 @@ func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
         response = execResponse(addr)
     case "DISCARD":
         response = discardResponse(addr)
+    case "SUBSCRIBE":
+        response = subscribeResponse(cmd, addr)
     }
 
     rawCmd := encodeStringArray(cmd)

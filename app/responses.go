@@ -443,3 +443,14 @@ func discardResponse(addr string) string {
     delete(queuedCommands, addr)
     return encodeSimpleString("OK")
 }
+
+func subscribeResponse(cmd []string, addr string) string {
+    channel := cmd[1]
+    channelSubscribers[channel] = append(channelSubscribers[channel], addr)
+    response := []RespValue{
+        {Type: '$', Value: "subscribe"},
+        {Type: '$', Value: channel},
+        {Type: ':', Value: len(channelSubscribers[channel])},
+    }
+    return encodeRespValueArray(response)
+}

@@ -101,3 +101,29 @@ func encodeRedisValue(rv RedisValue) string {
         return encodeBulkString("")
     }
 }
+
+func encodeRespValue(val RespValue) string {
+    switch val.Type {
+    case '+':
+        return encodeSimpleString(val.Value.(string))
+    case '-':
+        return encodeSimpleErrorResponse(val.Value.(string))
+    case ':':
+        return encodeInt(val.Value.(int))
+    case '$':
+        return encodeBulkString(val.Value.(string))
+    case '*':
+        return encodeRespValueArray(val.Value.([]RespValue))
+    default:
+        return encodeBulkString("")
+    }
+}
+
+func encodeRespValueArray(arr []RespValue) string {
+    var sb strings.Builder
+    sb.WriteString(fmt.Sprintf("*%d\r\n", len(arr)))
+    for _, v := range arr {
+        sb.WriteString(encodeRespValue(v))
+    }
+    return sb.String()
+}
