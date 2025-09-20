@@ -40,6 +40,7 @@ var config serverConfig
 var streamTopMilisecondsTimeForStream int
 var entryIds = make(map[int]int) // key is milisecondsTime and value is sequenceNumber
 var replicaAckOffsets = make(map[string]int) // key: replica address, value: last acked offset
+var queuedCommands = make(map[string][][]string)
 
 func main() {
 	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")
@@ -195,7 +196,16 @@ func readCommand(scanner *bufio.Scanner) ([]string, error) {
     return cmd, nil
 }
 
+func isInMulti(addr string) bool {
+    cmds, ok := queuedCommands[addr]
+    return ok && len(cmds) > 0
+}
+
 func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
+    if isInMulti(addr) {
+        queuedCommands[addr] = append(queuedCommands[addr], cmd)
+    }
+
     isWrite := false
     switch strings.ToUpper(cmd[0]) {
     case "COMMAND":
@@ -244,6 +254,8 @@ func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
         response = bLPopResponse(cmd, addr)
     case "INCR":
         response = incrResponse(cmd)
+    case "MULTI":
+        response  = multiResponse(addr)
     }
     if isWrite {
         config.WriteOffset++

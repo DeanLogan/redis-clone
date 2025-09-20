@@ -410,3 +410,10 @@ func incrResponse(cmd []string) string {
     setGenericValue(key, intVal)
     return encodeInt(intVal)
 }
+
+func multiResponse(addr string) string {
+    if _, ok := queuedCommands[addr]; !ok {
+        queuedCommands[addr] = [][]string{}
+    }
+    return encodeSimpleString("OK")
+}
