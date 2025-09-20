@@ -72,3 +72,24 @@ func encodeStreamArray(entries []string) string {
     }
     return fmt.Sprintf("*%d\r\n%s", len(entries), strings.Join(entries, ""))
 }
+
+func encodeRedisValue(rv RedisValue) string {
+    switch v := rv.value.(type) {
+    case string:
+        return encodeBulkString(v)
+    case int:
+        return encodeInt(v)
+    case []string:
+        return encodeStringArray(v)
+    case map[string]struct{}:
+        set := make([]string, 0, len(v))
+        for k := range v {
+            set = append(set, k)
+        }
+        return encodeStringArray(set)
+    case RedisStream:
+        return encodeStream(v)
+    default:
+        return encodeBulkString("")
+    }
+}

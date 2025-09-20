@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -179,7 +178,7 @@ func infoResponse(cmd []string) string {
 
 func setResponse(cmd []string) string {
     key, value := cmd[1], cmd[2]
-    setString(key, value)
+    setGenericValue(key, value)
     if len(cmd) == 5 && strings.ToUpper(cmd[3]) == "PX" {
         expiration, _ := strconv.Atoi(cmd[4])
         ttl[key] = time.Now().Add(time.Millisecond * time.Duration(expiration))
@@ -294,11 +293,11 @@ func bLPopResponse(cmd []string, addr string) string {
 func getResponse(cmd []string) string {
     // TODO: check length
     key := cmd[1]
-    value, ok := store[key]
-    if ok && !isExpired(key){
-        return encodeRedisValue(value)
+    value, ok := getString(key)
+    if !ok || isExpired(key){
+        value = ""
     }
-    return encodeBulkString("")
+    return encodeBulkString(value)
 }
 
 func waitResponse(cmd []string) string {
@@ -397,32 +396,17 @@ func keysResponse(cmd []string) string {
     return encodeStringArray(keys)
 }
 
-func task(wg *sync.WaitGroup, done chan<- struct{}, conn net.Conn, cmd []string) {
-    defer wg.Done()
-
-    _, err := conn.Write([]byte(encodeStringArray(cmd)))
-    if err != nil {
-        fmt.Println("Error sending message: ", err.Error())
-        return
-    }
-
-    buf := make([]byte, 1024)
-    for {
-        n, err := conn.Read(buf)
-        if err != nil {
-            fmt.Println("failed reading from connection")
-            fmt.Println("Error reading:", err.Error())
-            return
-        }
-
-        response := string(buf[:n])
-        if strings.Contains(response, "ACK") {
-            done <- struct{}{}
-            return
-        }
-    }
-}
-
 func errorResponse(err error) string {
 	return fmt.Sprintf("-%s\r\n", err.Error())
+}
+
+func incrResponse(cmd []string) string {
+    key := cmd[1]
+    intVal, ok := getInt(key)
+    if !ok {
+        return encodeSimpleErrorResponse("value is not an integer or out of range")
+    }
+    intVal++
+    setGenericValue(key, intVal)
+    return encodeInt(intVal)
 }

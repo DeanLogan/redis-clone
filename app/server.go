@@ -242,6 +242,8 @@ func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
         response = lPopResponse(cmd)
     case "BLPOP":
         response = bLPopResponse(cmd, addr)
+    case "INCR":
+        response = incrResponse(cmd)
     }
     if isWrite {
         config.WriteOffset++

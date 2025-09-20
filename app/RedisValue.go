@@ -1,5 +1,9 @@
 package main
 
+import (
+    "strconv"
+)
+
 type StreamEntry struct {
     ID     string
     Fields map[string]string
@@ -13,27 +17,6 @@ var store = make(map[string]RedisValue)
 
 type RedisValue struct {
     value interface{}
-}
-
-func encodeRedisValue(rv RedisValue) string {
-    switch v := rv.value.(type) {
-    case string:
-        return encodeBulkString(v)
-    case int:
-        return encodeInt(v)
-    case []string:
-        return encodeStringArray(v)
-    case map[string]struct{}:
-        set := make([]string, 0, len(v))
-        for k := range v {
-            set = append(set, k)
-        }
-        return encodeStringArray(set)
-    case RedisStream:
-        return encodeStream(v)
-    default:
-        return encodeBulkString("")
-    }
 }
 
 func getRedisValueType(rv RedisValue) string {
@@ -72,11 +55,7 @@ func addStreamEntry(key, id string, fields map[string]string) {
     store[key] = RedisValue{value: redisStream}
 }
 
-func setString(key, value string) {
-    store[key] = RedisValue{value: value}
-}
-
-func setInt(key string, value int) {
+func setGenericValue[T any](key string, value T) {
     store[key] = RedisValue{value: value}
 }
 
@@ -130,17 +109,33 @@ func getString(key string) (string, bool) {
     if !ok {
         return "", false
     }
-    strVal, ok := val.value.(string)
-    return strVal, ok
+    switch v := val.value.(type) {
+    case string:
+        return v, true
+    case int:
+        return strconv.Itoa(v), true
+    case float64:
+        return strconv.FormatFloat(v, 'f', -1, 64), true
+    default:
+        return "", false
+    }
 }
 
 func getInt(key string) (int, bool) {
-    val, ok := store[key]
-    if !ok {
-        return 0, false
+    redisVal, exists := store[key]
+    if !exists {
+        return 0, true
     }
-    intVal, ok := val.value.(int)
-    return intVal, ok
+    switch value := redisVal.value.(type) {
+    case int:
+        return value, true
+    case string:
+        intValue, err := strconv.Atoi(value)
+        if err == nil {
+            return intValue, true
+        }
+    }
+    return 0, false
 }
 
 func getList[T any](key string) ([]T, bool) {
