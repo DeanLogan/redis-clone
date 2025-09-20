@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+    "math"
 )
 
 func commandResponse() string {
@@ -110,8 +111,9 @@ func replconfResponse(cmd []string, addr string) string {
 		if config.Role != "slave" && len(cmd) < 2 {
 			return errorResponse(fmt.Errorf("invalid replconf command"))
 		} 
-        if cmd[2] == "*"{
-            return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(config.ReplOffset-37)}) // subtracted 37 as ReplOffset includes the current command which should not be included in the response
+        if cmd[2] == "*" {
+            bytes := int(math.Max(float64(config.ReplOffset), 0))
+            return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(bytes)}) // subtracted 37 as ReplOffset includes the current command which should not be included in the response
         } else {
             return encodeSimpleString("OK")
         }
@@ -431,7 +433,7 @@ func execResponse(addr string) string {
         response, _ := handleCommand(cmd, addr)
         results = append(results, response)
     }
-    return encodeRespValuesArray(results)
+    return wrapRespFragmentsAsArray(results)
 }
 
 func discardResponse(addr string) string {

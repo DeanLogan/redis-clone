@@ -239,26 +239,34 @@ func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
     case "XREAD":
         response = xreadResponse(cmd, addr)
     case "RPUSH":
+        isWrite = true
         response = rPushResponse(cmd)
     case "LRANGE":
         response = lRangeResponse(cmd)
     case "LPUSH":
+        isWrite = true
         response = lPushResponse(cmd)
     case "LLEN":
         response = lLenResponse(cmd)
     case "LPOP":
+        isWrite = true
         response = lPopResponse(cmd)
     case "BLPOP":
         response = bLPopResponse(cmd, addr)
     case "INCR":
+        isWrite = true
         response = incrResponse(cmd)
     case "MULTI":
-        response  = multiResponse(addr)
+        response = multiResponse(addr)
     case "EXEC":
-        response  = execResponse(addr)
+        response = execResponse(addr)
     case "DISCARD":
-        response  = discardResponse(addr)
+        response = discardResponse(addr)
     }
+
+    rawCmd := encodeStringArray(cmd)
+    config.ReplOffset += len(rawCmd)
+
     if isWrite {
         config.WriteOffset++
         propagate(cmd)
