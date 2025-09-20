@@ -412,7 +412,7 @@ func incrResponse(cmd []string) string {
 }
 
 func multiResponse(addr string) string {
-    if _, ok := queuedCommands[addr]; !ok {
+    if !isInMulti(addr) {
         queuedCommands[addr] = [][]string{}
     }
     return encodeSimpleString("OK")
@@ -432,4 +432,12 @@ func execResponse(addr string) string {
         results = append(results, response)
     }
     return encodeRespValuesArray(results)
+}
+
+func discardResponse(addr string) string {
+    if !isInMulti(addr) {
+        return encodeSimpleErrorResponse("DISCARD without MULTI")
+    }
+    delete(queuedCommands, addr)
+    return encodeSimpleString("OK")
 }

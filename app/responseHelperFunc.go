@@ -289,3 +289,8 @@ func handleBlockingPop(key string, addr string) []string {
     _, val := removeFromList(key, arr, 0)
     return []string{key, val}
 }
+
+func isInMulti(addr string) bool {
+    _, ok := queuedCommands[addr]
+    return ok
+}
