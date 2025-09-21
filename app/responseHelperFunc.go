@@ -294,3 +294,29 @@ func isInMulti(addr string) bool {
     _, ok := queuedCommands[addr]
     return ok
 }
+
+func subscribe(channel string, addr string) {
+    if _, ok := channelSubscribers[channel]; !ok {
+        channelSubscribers[channel] = make(map[string]struct{})
+    }
+    channelSubscribers[channel][addr] = struct{}{}
+}
+
+func unsubscribe(channel string, addr string) {
+    if subs, ok := channelSubscribers[channel]; ok {
+        delete(subs, addr)
+        if len(subs) == 0 {
+            delete(channelSubscribers, channel)
+        }
+    }
+}
+
+func subscriptionCount(addr string) int {
+    count := 0
+    for _, subs := range channelSubscribers {
+        if _, ok := subs[addr]; ok {
+            count++
+        }
+    }
+    return count
+}

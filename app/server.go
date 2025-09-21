@@ -41,7 +41,7 @@ var streamTopMilisecondsTimeForStream int
 var entryIds = make(map[int]int) // key is milisecondsTime and value is sequenceNumber
 var replicaAckOffsets = make(map[string]int) // key: replica address, value: last acked offset
 var queuedCommands = make(map[string][][]string)
-var channelSubscribers = make(map[string][]string)
+var channelSubscribers = make(map[string]map[string]struct{})
 
 func main() {
 	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")

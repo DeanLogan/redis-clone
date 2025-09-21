@@ -446,11 +446,11 @@ func discardResponse(addr string) string {
 
 func subscribeResponse(cmd []string, addr string) string {
     channel := cmd[1]
-    channelSubscribers[channel] = append(channelSubscribers[channel], addr)
+    subscribe(channel, addr)
     response := []RespValue{
         {Type: '$', Value: "subscribe"},
         {Type: '$', Value: channel},
-        {Type: ':', Value: len(channelSubscribers[channel])},
+        {Type: ':', Value: subscriptionCount(addr)},
     }
     return encodeRespValueArray(response)
 }
