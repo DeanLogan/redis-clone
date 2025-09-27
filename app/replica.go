@@ -110,7 +110,7 @@ func syncWithMaster(reader *bufio.Reader, masterConn net.Conn) {
 			break
 		}
 		fmt.Printf("[from master] Command = %q\n", cmd)
-		response, _ := handleCommand(cmd, "")
+		response, _ := handleCommand(cmd, nil)
 		fmt.Printf("response = %q\n", response)
 		if strings.ToUpper(cmd[0]) == "REPLCONF" {
 			fmt.Printf("ack = %q\n", cmd)

@@ -16,7 +16,7 @@ func commandResponse() string {
     return encodeSimpleString("OK")
 }
 
-func xreadResponse(cmd []string, addr string) string {
+func xreadResponse(cmd []string, conn net.Conn) string {
     parsedCmd, count, blockTime, err := parseXreadArguments(cmd)
     if err != nil {
         return encodeSimpleErrorResponse(err.Error())
@@ -31,7 +31,7 @@ func xreadResponse(cmd []string, addr string) string {
 
     entries := fetchStreamEntries(streamKeys, startIDs, count)
     if len(entries) == 0 && blockTime >= 0 {
-        entries = waitForNewStreamEntries(streamKeys, blockTime, startIDs, count, addr)
+        entries = waitForNewStreamEntries(streamKeys, blockTime, startIDs, count, conn)
     }
     
     return encodeStreamArray(entries)
@@ -104,7 +104,7 @@ func typeResponse(cmd []string) string {
     return encodeSimpleString("none")
 }
 
-func replconfResponse(cmd []string, addr string) string {
+func replconfResponse(cmd []string, conn net.Conn) string {
 	switch strings.ToUpper(cmd[1]) {
 	case "GETACK":
 		if config.Role != "slave" && len(cmd) < 2 {
@@ -119,8 +119,8 @@ func replconfResponse(cmd []string, addr string) string {
     case "ACK":
         ackOffset, _ := strconv.Atoi(cmd[2])
         // Only update if this connection is a known replica
-        if checkIfAddrIsReplica(addr) {
-            replicaAckOffsets[addr] = ackOffset
+        if checkIfConnIsReplica(conn) {
+            replicaAckOffsets[conn] = ackOffset
             ackReceived <- true
         }
         return ""
@@ -268,7 +268,7 @@ func lPopResponse(cmd []string) string {
     return encodeStringArray(valsPopped)
 }
 
-func bLPopResponse(cmd []string, addr string) string {
+func bLPopResponse(cmd []string, conn net.Conn) string {
     key := cmd[1]
     timoutStr := cmd[2]
     timeout, err := strconv.ParseFloat(timoutStr, 64)
@@ -276,11 +276,11 @@ func bLPopResponse(cmd []string, addr string) string {
         return "$-1\r\n"
     }
     
-    blockClient := blockingClient{addr, make(chan struct{})}
+    blockClient := blockingClient{conn, make(chan struct{})}
     addBlockingClient(key, blockClient, blockingQueueForBlop)
     if timeout == 0 {
         <-blockClient.notify
-        arr := handleBlockingPop(key, addr)
+        arr := handleBlockingPop(key, conn)
         return encodeStringArray(arr)
     }
 
@@ -289,10 +289,10 @@ func bLPopResponse(cmd []string, addr string) string {
     
     select {
     case <-blockClient.notify:
-        arr := handleBlockingPop(key, addr)
+        arr := handleBlockingPop(key, conn)
         return encodeStringArray(arr)
     case <-timeoutChan:
-        removeBlockingClient(key, addr, blockingQueueForBlop)
+        removeBlockingClient(key, conn, blockingQueueForBlop)
         return "*-1\r\n"
     }
 }
@@ -418,44 +418,45 @@ func incrResponse(cmd []string) string {
     return encodeInt(intVal)
 }
 
-func multiResponse(addr string) string {
-    if !isInMulti(addr) {
-        queuedCommands[addr] = [][]string{}
+func multiResponse(conn net.Conn) string {
+    if !isInMulti(conn) {
+        queuedCommands[conn] = [][]string{}
     }
     return encodeSimpleString("OK")
 }
 
-func execResponse(addr string) string {
-    commands, ok := queuedCommands[addr]
+func execResponse(conn net.Conn) string {
+    commands, ok := queuedCommands[conn]
     if !ok {
         return encodeSimpleErrorResponse("EXEC without MULTI")
     }
     var results []string
 
-    delete(queuedCommands, addr)
+    delete(queuedCommands, conn)
     for _, cmd := range commands {
         fmt.Println(cmd)
-        response, _ := handleCommand(cmd, addr)
+        response, _ := handleCommand(cmd, conn)
         results = append(results, response)
     }
     return wrapRespFragmentsAsArray(results)
 }
 
-func discardResponse(addr string) string {
-    if !isInMulti(addr) {
+func discardResponse(conn net.Conn) string {
+    if !isInMulti(conn) {
         return encodeSimpleErrorResponse("DISCARD without MULTI")
     }
-    delete(queuedCommands, addr)
+    delete(queuedCommands, conn)
     return encodeSimpleString("OK")
 }
 
-func subscribeResponse(cmd []string, addr string) string {
+func subscribeResponse(cmd []string, conn net.Conn) string {
     channel := cmd[1]
-    subscribe(channel, addr)
+    subscribe(channel, conn)
     response := []RespValue{
         {Type: '$', Value: "subscribe"},
         {Type: '$', Value: channel},
-        {Type: ':', Value: subscriberCount(addr)},
+        {Type: ':', Value: subscriberCount(conn)},
     }
     return encodeRespValueArray(response)
 }
+

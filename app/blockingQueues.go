@@ -1,7 +1,11 @@
 package main
 
+import (
+    "net"
+)
+
 type blockingClient struct {
-    addr   string       // address of the client that is being blocked
+    conn   net.Conn       // address of the client that is being blocked
     notify chan struct{}  // channel to notify when the client is no longer blocked (string to send the value that was pushed)
 }
 
@@ -23,10 +27,10 @@ func popBlockingClient(listKey string, queueMap map[string][]blockingClient) (bl
     return client, true
 }
 
-func removeBlockingClient(listKey string, addr string, queueMap map[string][]blockingClient) {
+func removeBlockingClient(listKey string, conn net.Conn, queueMap map[string][]blockingClient) {
     queue := queueMap[listKey]
     for i, client := range queue {
-        if client.addr == addr {
+        if client.conn == conn {
             queueMap[listKey] = append(queue[:i], queue[i+1:]...)
             break
         }

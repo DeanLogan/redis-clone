@@ -6,17 +6,16 @@ import (
 	"strings"
 	"time"
 	"unicode"
+    "net"
 )
 
-func checkIfAddrIsReplica(addr string) bool {
-    isReplica := false
+func checkIfConnIsReplica(conn net.Conn) bool {
     for _, r := range config.Replicas {
-        if r.RemoteAddr().String() == addr {
-            isReplica = true
-            break
+        if r == conn {
+            return true
         }
     }
-    return isReplica
+    return false
 }
 
 func toSnakeCase(str string) string {
@@ -217,21 +216,16 @@ func fetchStreamEntries(streamKeys, startIDs []string, count int) []string {
     return result
 }
 
-func waitForNewStreamEntries(streamKeys []string, blockTime int, startIDs []string, count int, addr string) []string {
+func waitForNewStreamEntries(streamKeys []string, blockTime int, startIDs []string, count int, conn net.Conn) []string {
     key := streamKeys[0]
     var entries []string
-    blockClient := blockingClient{addr, make(chan struct{})}
+    blockClient := blockingClient{conn, make(chan struct{})}
     addBlockingClient(key, blockClient, blockingQueueForXread)
-    fmt.Println(streamKeys)
-    fmt.Println(key)
-    fmt.Println(blockTime)
-    fmt.Println(startIDs)
-    fmt.Println(count)
-    fmt.Println(addr)
+
     if blockTime == 0 {
         // Block forever until notified
         <-blockClient.notify
-        removeBlockingClient(key, addr, blockingQueueForXread)
+        removeBlockingClient(key, conn, blockingQueueForXread)
         entries = fetchStreamEntries(streamKeys, startIDs, count)
     } else if blockTime > 0 {
         // waits depending on the block time which is measured in ms
@@ -240,10 +234,10 @@ func waitForNewStreamEntries(streamKeys []string, blockTime int, startIDs []stri
 
         select {
         case <-blockClient.notify:
-            removeBlockingClient(key, addr, blockingQueueForXread)
+            removeBlockingClient(key, conn, blockingQueueForXread)
             entries = fetchStreamEntries(streamKeys, startIDs, count)
         case <-timeoutChan:
-            removeBlockingClient(key, addr, blockingQueueForXread)
+            removeBlockingClient(key, conn, blockingQueueForXread)
             return nil 
         }
     }
@@ -283,38 +277,38 @@ func parseRangeIndices(cmd []string, arrLen int) (int, int, bool) {
     return startIndx, stopIndx, true
 }
 
-func handleBlockingPop(key string, addr string) []string {
+func handleBlockingPop(key string, conn net.Conn) []string {
     arr, _ := getList[string](key)
-    removeBlockingClient(key, addr, blockingQueueForBlop)
+    removeBlockingClient(key, conn, blockingQueueForBlop)
     _, val := removeFromList(key, arr, 0)
     return []string{key, val}
 }
 
-func isInMulti(addr string) bool {
-    _, ok := queuedCommands[addr]
+func isInMulti(conn net.Conn) bool {
+    _, ok := queuedCommands[conn]
     return ok
 }
 
-func subscribe(channel string, addr string) {
+func subscribe(channel string, conn net.Conn) {
     if _, ok := channelSubscribers[channel]; !ok {
-        channelSubscribers[channel] = make(map[string]struct{})
+        channelSubscribers[channel] = make(map[net.Conn]struct{})
     }
-    channelSubscribers[channel][addr] = struct{}{}
+    channelSubscribers[channel][conn] = struct{}{}
 }
 
-func unsubscribe(channel string, addr string) {
+func unsubscribe(channel string, conn net.Conn) {
     if subs, ok := channelSubscribers[channel]; ok {
-        delete(subs, addr)
+        delete(subs, conn)
         if len(subs) == 0 {
             delete(channelSubscribers, channel)
         }
     }
 }
 
-func subscriberCount(addr string) int {
+func subscriberCount(conn net.Conn) int {
     count := 0
     for _, subs := range channelSubscribers {
-        if _, ok := subs[addr]; ok {
+        if _, ok := subs[conn]; ok {
             count++
         }
     }

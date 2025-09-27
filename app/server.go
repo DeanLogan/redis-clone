@@ -33,55 +33,57 @@ type serverConfig struct {
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
+var config serverConfig
+
 var ttl = make(map[string]time.Time)
 var keys = []string{}
-var ackReceived chan bool
-var config serverConfig
 var streamTopMilisecondsTimeForStream int
 var entryIds = make(map[int]int) // key is milisecondsTime and value is sequenceNumber
-var replicaAckOffsets = make(map[string]int) // key: replica address, value: last acked offset
-var queuedCommands = make(map[string][][]string)
-var channelSubscribers = make(map[string]map[string]struct{})
-var commandHandlers map[string]func([]string, string) (string, bool)
-var subscriberCommandHandlers map[string]func([]string, string) (string, bool)
+var replicaAckOffsets = make(map[net.Conn]int) // key: replica address, value: last acked offset
+var queuedCommands = make(map[net.Conn][][]string)
+var channelSubscribers = make(map[string]map[net.Conn]struct{})
+
+var ackReceived chan bool
+var commandHandlers map[string]func([]string, net.Conn) (string, bool)
+var subscriberCommandHandlers map[string]func([]string, net.Conn) (string, bool)
 
 func init() {
-    commandHandlers = map[string]func([]string, string) (string, bool){
-        "COMMAND":   func(cmd []string, addr string) (string, bool) { return commandResponse(), false },
-        "REPLCONF":  func(cmd []string, addr string) (string, bool) { return replconfResponse(cmd, addr), false },
-        "PSYNC":     func(cmd []string, addr string) (string, bool) { return psyncResponse(cmd) },
-        "PING":      func(cmd []string, addr string) (string, bool) { return pingResponse(false), false },
-        "ECHO":      func(cmd []string, addr string) (string, bool) { return echoResponse(cmd), false },
-        "INFO":      func(cmd []string, addr string) (string, bool) { return infoResponse(cmd), false },
-        "SET":       func(cmd []string, addr string) (string, bool) { return setResponse(cmd), false },
-        "GET":       func(cmd []string, addr string) (string, bool) { return getResponse(cmd), false },
-        "WAIT":      func(cmd []string, addr string) (string, bool) { return waitResponse(cmd), false },
-        "CONFIG":    func(cmd []string, addr string) (string, bool) { return configResponse(cmd), false },
-        "KEYS":      func(cmd []string, addr string) (string, bool) { return keysResponse(cmd), false },
-        "TYPE":      func(cmd []string, addr string) (string, bool) { return typeResponse(cmd), false },
-        "XADD":      func(cmd []string, addr string) (string, bool) { return xaddResponse(cmd), false },
-        "XRANGE":    func(cmd []string, addr string) (string, bool) { return xrangeResponse(cmd), false },
-        "XREAD":     func(cmd []string, addr string) (string, bool) { return xreadResponse(cmd, addr), false },
-        "RPUSH":     func(cmd []string, addr string) (string, bool) { return rPushResponse(cmd), false },
-        "LRANGE":    func(cmd []string, addr string) (string, bool) { return lRangeResponse(cmd), false },
-        "LPUSH":     func(cmd []string, addr string) (string, bool) { return lPushResponse(cmd), false },
-        "LLEN":      func(cmd []string, addr string) (string, bool) { return lLenResponse(cmd), false },
-        "LPOP":      func(cmd []string, addr string) (string, bool) { return lPopResponse(cmd), false },
-        "BLPOP":     func(cmd []string, addr string) (string, bool) { return bLPopResponse(cmd, addr), false },
-        "INCR":      func(cmd []string, addr string) (string, bool) { return incrResponse(cmd), false },
-        "MULTI":     func(cmd []string, addr string) (string, bool) { return multiResponse(addr), false },
-        "EXEC":      func(cmd []string, addr string) (string, bool) { return execResponse(addr), false },
-        "DISCARD":   func(cmd []string, addr string) (string, bool) { return discardResponse(addr), false },
-        "SUBSCRIBE": func(cmd []string, addr string) (string, bool) { return subscribeResponse(cmd, addr), false },
+    commandHandlers = map[string]func([]string, net.Conn) (string, bool){
+        "COMMAND":   func(cmd []string, conn net.Conn) (string, bool) { return commandResponse(), false },
+        "REPLCONF":  func(cmd []string, conn net.Conn) (string, bool) { return replconfResponse(cmd, conn), false },
+        "PSYNC":     func(cmd []string, conn net.Conn) (string, bool) { return psyncResponse(cmd) },
+        "PING":      func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(false), false },
+        "ECHO":      func(cmd []string, conn net.Conn) (string, bool) { return echoResponse(cmd), false },
+        "INFO":      func(cmd []string, conn net.Conn) (string, bool) { return infoResponse(cmd), false },
+        "SET":       func(cmd []string, conn net.Conn) (string, bool) { return setResponse(cmd), false },
+        "GET":       func(cmd []string, conn net.Conn) (string, bool) { return getResponse(cmd), false },
+        "WAIT":      func(cmd []string, conn net.Conn) (string, bool) { return waitResponse(cmd), false },
+        "CONFIG":    func(cmd []string, conn net.Conn) (string, bool) { return configResponse(cmd), false },
+        "KEYS":      func(cmd []string, conn net.Conn) (string, bool) { return keysResponse(cmd), false },
+        "TYPE":      func(cmd []string, conn net.Conn) (string, bool) { return typeResponse(cmd), false },
+        "XADD":      func(cmd []string, conn net.Conn) (string, bool) { return xaddResponse(cmd), false },
+        "XRANGE":    func(cmd []string, conn net.Conn) (string, bool) { return xrangeResponse(cmd), false },
+        "XREAD":     func(cmd []string, conn net.Conn) (string, bool) { return xreadResponse(cmd, conn), false },
+        "RPUSH":     func(cmd []string, conn net.Conn) (string, bool) { return rPushResponse(cmd), false },
+        "LRANGE":    func(cmd []string, conn net.Conn) (string, bool) { return lRangeResponse(cmd), false },
+        "LPUSH":     func(cmd []string, conn net.Conn) (string, bool) { return lPushResponse(cmd), false },
+        "LLEN":      func(cmd []string, conn net.Conn) (string, bool) { return lLenResponse(cmd), false },
+        "LPOP":      func(cmd []string, conn net.Conn) (string, bool) { return lPopResponse(cmd), false },
+        "BLPOP":     func(cmd []string, conn net.Conn) (string, bool) { return bLPopResponse(cmd, conn), false },
+        "INCR":      func(cmd []string, conn net.Conn) (string, bool) { return incrResponse(cmd), false },
+        "MULTI":     func(cmd []string, conn net.Conn) (string, bool) { return multiResponse(conn), false },
+        "EXEC":      func(cmd []string, conn net.Conn) (string, bool) { return execResponse(conn), false },
+        "DISCARD":   func(cmd []string, conn net.Conn) (string, bool) { return discardResponse(conn), false },
+        "SUBSCRIBE": func(cmd []string, conn net.Conn) (string, bool) { return subscribeResponse(cmd, conn), false },
     }
 
-    subscriberCommandHandlers = map[string]func([]string, string) (string, bool){
-        "SUBSCRIBE":    func(cmd []string, addr string) (string, bool) { return subscribeResponse(cmd, addr), false },
-        "UNSUBSCRIBE":  func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
-        "PSUBSCRIBE":   func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
-        "PUNSUBSCRIBE": func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
-        "PING":         func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
-        "QUIT":         func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
+    subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){
+        "SUBSCRIBE":    func(cmd []string, conn net.Conn) (string, bool) { return subscribeResponse(cmd, conn), false },
+        "UNSUBSCRIBE":  func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(true), false },
+        "PSUBSCRIBE":   func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(true), false },
+        "PUNSUBSCRIBE": func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(true), false },
+        "PING":         func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(true), false },
+        "QUIT":         func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(true), false },
     }
 }
 
@@ -192,8 +194,7 @@ func manageClientConnection(id int, conn net.Conn) {
         }
 
         fmt.Printf("[#%d] Command = %v\n", id, cmd)
-        addr := conn.RemoteAddr().String()
-        response, resynch := handleCommand(cmd, addr)
+        response, resynch := handleCommand(cmd, conn)
 
         bytesSent, err := conn.Write([]byte(response))
         if err != nil {
@@ -239,19 +240,19 @@ func readCommand(scanner *bufio.Scanner) ([]string, error) {
     return cmd, nil
 }
 
-func handleCommand(cmd []string, addr string) (response string, resynch bool) {
+func handleCommand(cmd []string, conn net.Conn) (response string, resynch bool) {
     command := strings.ToUpper(strings.TrimSpace(cmd[0]))
 
-    if isSubscriber(addr) {
+    if isSubscriber(conn) {
         handler, ok := subscriberCommandHandlers[command]
         if !ok {
             return encodeSimpleErrorResponse(fmt.Sprintf("Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", command)), false
         }
-        return handler(cmd, addr)
+        return handler(cmd, conn)
     }
 
-    if isInMulti(addr) && command != "EXEC" && command != "MULTI" && command != "DISCARD" {
-        queuedCommands[addr] = append(queuedCommands[addr], cmd)
+    if isInMulti(conn) && command != "EXEC" && command != "MULTI" && command != "DISCARD" {
+        queuedCommands[conn] = append(queuedCommands[conn], cmd)
         return encodeSimpleString("QUEUED"), false
     }
 
@@ -259,7 +260,7 @@ func handleCommand(cmd []string, addr string) (response string, resynch bool) {
     if !ok {
         return encodeSimpleErrorResponse("Unknown command"), false
     }
-    response, resynch = handler(cmd, addr)
+    response, resynch = handler(cmd, conn)
 
     rawCmd := encodeStringArray(cmd)
     config.ReplOffset += len(rawCmd)
@@ -281,8 +282,8 @@ func isWriteCommand(command string) bool {
     }
 }
 
-func isSubscriber(addr string) bool {
-    return subscriberCount(addr) > 0
+func isSubscriber(conn net.Conn) bool {
+    return subscriberCount(conn) > 0
 }
 
 func sendAndCheckResponse(conn net.Conn, reader *bufio.Reader, command []string, expectedResponse string) (bool, error) {
