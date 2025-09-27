@@ -32,9 +32,6 @@ func xreadResponse(cmd []string, addr string) string {
         entries = waitForNewStreamEntries(streamKeys, blockTime, startIDs, count, addr)
     }
     
-    if entries == nil {
-        return "$-1\r\n" // returns null as bulk string (-1)
-    }
     return encodeStreamArray(entries)
 }
 
@@ -285,13 +282,10 @@ func bLPopResponse(cmd []string, addr string) string {
     select {
     case <-blockClient.notify:
         arr := handleBlockingPop(key, addr)
-        if len(arr) == 0 {
-            return "*-1\r\n"
-        }
         return encodeStringArray(arr)
     case <-timeoutChan:
         removeBlockingClient(key, addr, blockingQueueForBlop)
-        return "$-1\r\n"
+        return "*-1\r\n"
     }
 }
 

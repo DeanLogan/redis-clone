@@ -76,7 +76,7 @@ func encodeSimpleErrorResponse(s string) string{
 
 func encodeStreamArray(entries []string) string {
     if len(entries) == 0 {
-        return encodeBulkString("")
+        return "*-1\r\n" // returns a null array
     }
     return fmt.Sprintf("*%d\r\n%s", len(entries), strings.Join(entries, ""))
 }

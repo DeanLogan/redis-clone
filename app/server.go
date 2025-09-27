@@ -42,6 +42,48 @@ var entryIds = make(map[int]int) // key is milisecondsTime and value is sequence
 var replicaAckOffsets = make(map[string]int) // key: replica address, value: last acked offset
 var queuedCommands = make(map[string][][]string)
 var channelSubscribers = make(map[string]map[string]struct{})
+var commandHandlers map[string]func([]string, string) (string, bool)
+var subscribtionCommandHandlers map[string]func([]string, string) (string, bool)
+
+func init() {
+    commandHandlers = map[string]func([]string, string) (string, bool){
+        "COMMAND":   func(cmd []string, addr string) (string, bool) { return commandResponse(), false },
+        "REPLCONF":  func(cmd []string, addr string) (string, bool) { return replconfResponse(cmd, addr), false },
+        "PSYNC":     func(cmd []string, addr string) (string, bool) { return psyncResponse(cmd) },
+        "PING":      func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
+        "ECHO":      func(cmd []string, addr string) (string, bool) { return echoResponse(cmd), false },
+        "INFO":      func(cmd []string, addr string) (string, bool) { return infoResponse(cmd), false },
+        "SET":       func(cmd []string, addr string) (string, bool) { return setResponse(cmd), false },
+        "GET":       func(cmd []string, addr string) (string, bool) { return getResponse(cmd), false },
+        "WAIT":      func(cmd []string, addr string) (string, bool) { return waitResponse(cmd), false },
+        "CONFIG":    func(cmd []string, addr string) (string, bool) { return configResponse(cmd), false },
+        "KEYS":      func(cmd []string, addr string) (string, bool) { return keysResponse(cmd), false },
+        "TYPE":      func(cmd []string, addr string) (string, bool) { return typeResponse(cmd), false },
+        "XADD":      func(cmd []string, addr string) (string, bool) { return xaddResponse(cmd), false },
+        "XRANGE":    func(cmd []string, addr string) (string, bool) { return xrangeResponse(cmd), false },
+        "XREAD":     func(cmd []string, addr string) (string, bool) { return xreadResponse(cmd, addr), false },
+        "RPUSH":     func(cmd []string, addr string) (string, bool) { return rPushResponse(cmd), false },
+        "LRANGE":    func(cmd []string, addr string) (string, bool) { return lRangeResponse(cmd), false },
+        "LPUSH":     func(cmd []string, addr string) (string, bool) { return lPushResponse(cmd), false },
+        "LLEN":      func(cmd []string, addr string) (string, bool) { return lLenResponse(cmd), false },
+        "LPOP":      func(cmd []string, addr string) (string, bool) { return lPopResponse(cmd), false },
+        "BLPOP":     func(cmd []string, addr string) (string, bool) { return bLPopResponse(cmd, addr), false },
+        "INCR":      func(cmd []string, addr string) (string, bool) { return incrResponse(cmd), false },
+        "MULTI":     func(cmd []string, addr string) (string, bool) { return multiResponse(addr), false },
+        "EXEC":      func(cmd []string, addr string) (string, bool) { return execResponse(addr), false },
+        "DISCARD":   func(cmd []string, addr string) (string, bool) { return discardResponse(addr), false },
+        "SUBSCRIBE": func(cmd []string, addr string) (string, bool) { return subscribeResponse(cmd, addr), false },
+    }
+
+    subscribtionCommandHandlers = map[string]func([]string, string) (string, bool){
+        "SUBSCRIBE":    func(cmd []string, addr string) (string, bool) { return subscribeResponse(cmd, addr), false },
+        "UNSUBSCRIBE":  func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
+        "PSUBSCRIBE":   func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
+        "PUNSUBSCRIBE": func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
+        "PING":         func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
+        "QUIT":         func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
+    }
+}
 
 func main() {
 	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")
@@ -197,84 +239,46 @@ func readCommand(scanner *bufio.Scanner) ([]string, error) {
     return cmd, nil
 }
 
-func handleCommand(cmd []string, addr string) (response string,  resynch bool) {
+func handleCommand(cmd []string, addr string) (response string, resynch bool) {
     command := strings.ToUpper(strings.TrimSpace(cmd[0]))
+
+    if subscriptionCount(addr) > 0 {
+        handler, ok := subscribtionCommandHandlers[command]
+        if !ok {
+            return encodeSimpleErrorResponse(fmt.Sprintf("Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", command)), false
+        }
+        return handler(cmd, addr)
+    }
+
     if isInMulti(addr) && command != "EXEC" && command != "MULTI" && command != "DISCARD" {
-        fmt.Println("ok what has happened")
         queuedCommands[addr] = append(queuedCommands[addr], cmd)
         return encodeSimpleString("QUEUED"), false
     }
 
-    isWrite := false
-    switch command {
-    case "COMMAND":
-        response = commandResponse()
-    case "REPLCONF":
-        response = replconfResponse(cmd, addr)
-    case "PSYNC":
-        response, resynch = psyncResponse(cmd)
-    case "PING":
-        response = pingResponse()
-    case "ECHO":
-        response = echoResponse(cmd)
-    case "INFO":
-        response = infoResponse(cmd)
-    case "SET":
-        isWrite = true
-        response = setResponse(cmd)
-    case "GET":
-        response = getResponse(cmd)
-    case "WAIT":
-        response = waitResponse(cmd)
-    case "CONFIG":
-        response = configResponse(cmd)
-    case "KEYS":
-        response = keysResponse(cmd)
-    case "TYPE":
-        response = typeResponse(cmd)
-    case "XADD":
-        isWrite = true
-        response = xaddResponse(cmd)
-    case "XRANGE":
-        response = xrangeResponse(cmd)
-    case "XREAD":
-        response = xreadResponse(cmd, addr)
-    case "RPUSH":
-        isWrite = true
-        response = rPushResponse(cmd)
-    case "LRANGE":
-        response = lRangeResponse(cmd)
-    case "LPUSH":
-        isWrite = true
-        response = lPushResponse(cmd)
-    case "LLEN":
-        response = lLenResponse(cmd)
-    case "LPOP":
-        isWrite = true
-        response = lPopResponse(cmd)
-    case "BLPOP":
-        response = bLPopResponse(cmd, addr)
-    case "INCR":
-        isWrite = true
-        response = incrResponse(cmd)
-    case "MULTI":
-        response = multiResponse(addr)
-    case "EXEC":
-        response = execResponse(addr)
-    case "DISCARD":
-        response = discardResponse(addr)
-    case "SUBSCRIBE":
-        response = subscribeResponse(cmd, addr)
+    handler, ok := commandHandlers[command]
+    if !ok {
+        return encodeSimpleErrorResponse("Unknown command"), false
     }
+    response, resynch = handler(cmd, addr)
 
     rawCmd := encodeStringArray(cmd)
     config.ReplOffset += len(rawCmd)
 
-    if isWrite {
+    // If the command is a write, propagate
+    if isWriteCommand(command) {
         config.WriteOffset++
         propagate(cmd)
     }
     return
+}
+
+func isWriteCommand(command string) bool {
+    switch command {
+    case "SET", "XADD", "RPUSH", "LPUSH", "LPOP", "INCR":
+        return true
+    default:
+        return false
+    }
 }
 
 func sendAndCheckResponse(conn net.Conn, reader *bufio.Reader, command []string, expectedResponse string) (bool, error) {
