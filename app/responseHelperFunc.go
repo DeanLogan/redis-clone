@@ -311,7 +311,7 @@ func unsubscribe(channel string, addr string) {
     }
 }
 
-func subscriptionCount(addr string) int {
+func subscriberCount(addr string) int {
     count := 0
     for _, subs := range channelSubscribers {
         if _, ok := subs[addr]; ok {

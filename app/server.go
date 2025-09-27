@@ -43,14 +43,14 @@ var replicaAckOffsets = make(map[string]int) // key: replica address, value: las
 var queuedCommands = make(map[string][][]string)
 var channelSubscribers = make(map[string]map[string]struct{})
 var commandHandlers map[string]func([]string, string) (string, bool)
-var subscribtionCommandHandlers map[string]func([]string, string) (string, bool)
+var subscriberCommandHandlers map[string]func([]string, string) (string, bool)
 
 func init() {
     commandHandlers = map[string]func([]string, string) (string, bool){
         "COMMAND":   func(cmd []string, addr string) (string, bool) { return commandResponse(), false },
         "REPLCONF":  func(cmd []string, addr string) (string, bool) { return replconfResponse(cmd, addr), false },
         "PSYNC":     func(cmd []string, addr string) (string, bool) { return psyncResponse(cmd) },
-        "PING":      func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
+        "PING":      func(cmd []string, addr string) (string, bool) { return pingResponse(false), false },
         "ECHO":      func(cmd []string, addr string) (string, bool) { return echoResponse(cmd), false },
         "INFO":      func(cmd []string, addr string) (string, bool) { return infoResponse(cmd), false },
         "SET":       func(cmd []string, addr string) (string, bool) { return setResponse(cmd), false },
@@ -75,13 +75,13 @@ func init() {
         "SUBSCRIBE": func(cmd []string, addr string) (string, bool) { return subscribeResponse(cmd, addr), false },
     }
 
-    subscribtionCommandHandlers = map[string]func([]string, string) (string, bool){
+    subscriberCommandHandlers = map[string]func([]string, string) (string, bool){
         "SUBSCRIBE":    func(cmd []string, addr string) (string, bool) { return subscribeResponse(cmd, addr), false },
-        "UNSUBSCRIBE":  func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
-        "PSUBSCRIBE":   func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
-        "PUNSUBSCRIBE": func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
-        "PING":         func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
-        "QUIT":         func(cmd []string, addr string) (string, bool) { return pingResponse(), false },
+        "UNSUBSCRIBE":  func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
+        "PSUBSCRIBE":   func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
+        "PUNSUBSCRIBE": func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
+        "PING":         func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
+        "QUIT":         func(cmd []string, addr string) (string, bool) { return pingResponse(true), false },
     }
 }
 
@@ -242,8 +242,8 @@ func readCommand(scanner *bufio.Scanner) ([]string, error) {
 func handleCommand(cmd []string, addr string) (response string, resynch bool) {
     command := strings.ToUpper(strings.TrimSpace(cmd[0]))
 
-    if subscriptionCount(addr) > 0 {
-        handler, ok := subscribtionCommandHandlers[command]
+    if isSubscriber(addr) {
+        handler, ok := subscriberCommandHandlers[command]
         if !ok {
             return encodeSimpleErrorResponse(fmt.Sprintf("Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context", command)), false
         }
@@ -279,6 +279,10 @@ func isWriteCommand(command string) bool {
     default:
         return false
     }
+}
+
+func isSubscriber(addr string) bool {
+    return subscriberCount(addr) > 0
 }
 
 func sendAndCheckResponse(conn net.Conn, reader *bufio.Reader, command []string, expectedResponse string) (bool, error) {

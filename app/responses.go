@@ -10,6 +10,8 @@ import (
     "math"
 )
 
+const NullBulkString = "$-1\r\n"
+
 func commandResponse() string {
     return encodeSimpleString("OK")
 }
@@ -145,7 +147,10 @@ func psyncResponse(cmd []string) (string, bool) {
     return "", false
 }
 
-func pingResponse() string {
+func pingResponse(subscriber bool) string {
+    if subscriber {
+        return encodeStringArray([]string{"pong", ""})
+    }
     return encodeSimpleString("PONG")
 }
 
@@ -167,6 +172,9 @@ func infoResponse(cmd []string) string {
             } else {
                 response += fmt.Sprintf("%s:%v", fieldName, field.Interface()) + "\r\n"
             }
+        }
+        if response == "" {
+            return NullBulkString
         }
         response = response[:len(response)-2] // remove the last \r\n
 		fmt.Println(encodeBulkString(response))
@@ -235,7 +243,7 @@ func lPopResponse(cmd []string) string {
     key := cmd[1]
     arr, ok := getList[string](key)
     if !ok {
-        return encodeBulkString("") // null bulk string
+        return NullBulkString
     }
 
     // returns bulk string if no optional command is given
@@ -294,7 +302,7 @@ func getResponse(cmd []string) string {
     key := cmd[1]
     value, ok := getString(key)
     if !ok || isExpired(key){
-        value = ""
+        return NullBulkString
     }
     return encodeBulkString(value)
 }
@@ -447,7 +455,7 @@ func subscribeResponse(cmd []string, addr string) string {
     response := []RespValue{
         {Type: '$', Value: "subscribe"},
         {Type: '$', Value: channel},
-        {Type: ':', Value: subscriptionCount(addr)},
+        {Type: ':', Value: subscriberCount(addr)},
     }
     return encodeRespValueArray(response)
 }
