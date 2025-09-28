@@ -460,3 +460,16 @@ func subscribeResponse(cmd []string, conn net.Conn) string {
     return encodeRespValueArray(response)
 }
 
+func publishResponse(cmd []string) string {
+    channelName := cmd[1]
+    msg := cmd[2]
+    channel := channelSubscribers[channelName]
+
+    arr := []string{"message", channelName, msg}
+    for conn := range channel {
+        conn.Write([]byte(encodeStringArray(arr)))
+    }
+    
+    count := len(channel)
+    return encodeInt(count)
+}

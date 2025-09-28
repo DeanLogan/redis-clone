@@ -75,6 +75,7 @@ func init() {
         "EXEC":      func(cmd []string, conn net.Conn) (string, bool) { return execResponse(conn), false },
         "DISCARD":   func(cmd []string, conn net.Conn) (string, bool) { return discardResponse(conn), false },
         "SUBSCRIBE": func(cmd []string, conn net.Conn) (string, bool) { return subscribeResponse(cmd, conn), false },
+        "PUBLISH":   func(cmd []string, conn net.Conn) (string, bool) { return publishResponse(cmd), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){
