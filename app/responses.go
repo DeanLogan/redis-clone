@@ -473,3 +473,42 @@ func publishResponse(cmd []string) string {
     count := len(channel)
     return encodeInt(count)
 }
+
+func unsubscribeResponse(cmd []string, conn net.Conn) string {
+    channel := cmd[1]
+    unsubscribe(channel, conn)
+        response := []RespValue{
+        {Type: '$', Value: "unsubscribe"},
+        {Type: '$', Value: channel},
+        {Type: ':', Value: subscriberCount(conn)},
+    }
+    return encodeRespValueArray(response)
+}
+
+func zaddResponse(cmd []string) string {
+    key := cmd[1]
+
+    sortedSet := getOrCreateSortedSet(key)
+    setLenBeforeAdds := len(sortedSet.Entries)
+
+    if (len(cmd)-2)%2 != 0 {
+        return encodeSimpleErrorResponse("ZADD requires score/member pairs")
+    }
+
+    for i := 2; i < len(cmd)-1; i += 2 {
+        scoreStr := cmd[i]
+        member := cmd[i+1]
+        score, err := strconv.ParseFloat(scoreStr, 64)
+        if err != nil {
+            return encodeSimpleErrorResponse("Score given is not a valid float value")
+        }
+
+        setEntry := SortedSetEntry{
+            Member: member,
+            Score:  score,
+        }
+        sortedSet = addToSortedSet(key, setEntry)
+    }
+
+    return encodeInt(len(sortedSet.Entries) - setLenBeforeAdds)
+}

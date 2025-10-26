@@ -2,7 +2,18 @@ package main
 
 import (
     "strconv"
+    "sort"
 )
+
+type SortedSetEntry struct {
+    Member string
+    Score  float64
+}
+
+type SortedSet struct {
+    Entries map[string]float64 // member: score
+    Sorted  []SortedSetEntry   // keep sorted
+}
 
 type StreamEntry struct {
     ID     string
@@ -31,6 +42,8 @@ func getRedisValueType(rv RedisValue) string {
         return "set"
     case RedisStream:
         return "stream"
+    case SortedSet:
+        return "sorted set"
     default:
         return "string"
     }
@@ -53,6 +66,52 @@ func addStreamEntry(key, id string, fields map[string]string) {
     }
 
     store[key] = RedisValue{value: redisStream}
+}
+
+func getOrCreateSortedSet(key string) SortedSet {
+    sortedSetVal, ok := store[key]
+    if !ok {
+        return SortedSet{
+            Entries: make(map[string]float64),
+            Sorted:  []SortedSetEntry{},
+        }
+    }
+    sortedSet, ok := sortedSetVal.value.(SortedSet)
+    if !ok {
+        return SortedSet{
+            Entries: make(map[string]float64),
+            Sorted:  []SortedSetEntry{},
+        }
+    }
+    return sortedSet
+}
+
+func updateSortedSetMember(sortedSet *SortedSet, value SortedSetEntry) {
+    // Update the score in the map
+    sortedSet.Entries[value.Member] = value.Score
+
+    // Update or add in the sorted slice
+    for i, entry := range sortedSet.Sorted {
+        if entry.Member == value.Member {
+            sortedSet.Sorted[i].Score = value.Score
+            return
+        }
+    }
+    sortedSet.Sorted = append(sortedSet.Sorted, value)
+}
+
+func sortSortedSet(sortedSet *SortedSet) {
+    sort.Slice(sortedSet.Sorted, func(i, j int) bool {
+        return sortedSet.Sorted[i].Score < sortedSet.Sorted[j].Score
+    })
+}
+
+func addToSortedSet(key string, value SortedSetEntry) SortedSet {
+    sortedSet := getOrCreateSortedSet(key)
+    updateSortedSetMember(&sortedSet, value)
+    sortSortedSet(&sortedSet)
+    store[key] = RedisValue{value: sortedSet}
+    return sortedSet
 }
 
 func setGenericValue[T any](key string, value T) {
