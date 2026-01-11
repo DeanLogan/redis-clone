@@ -78,11 +78,13 @@ func init() {
         "PUBLISH":      func(cmd []string, conn net.Conn) (string, bool) { return publishResponse(cmd), false },
         "UNSUBSCRIBE":  func(cmd []string, conn net.Conn) (string, bool) { return unsubscribeResponse(cmd, conn), false },
         "ZADD":         func(cmd []string, conn net.Conn) (string, bool) { return zaddResponse(cmd), false },
+        "ZRANK":        func(cmd []string, conn net.Conn) (string, bool) { return zrankResponse(cmd), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){
         "SUBSCRIBE":    func(cmd []string, conn net.Conn) (string, bool) { return subscribeResponse(cmd, conn), false },
         "UNSUBSCRIBE":  func(cmd []string, conn net.Conn) (string, bool) { return unsubscribeResponse(cmd, conn), false },
+        // TODO: Implement the below cmds
         "PSUBSCRIBE":   func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(true), false },
         "PUNSUBSCRIBE": func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(true), false },
         "PING":         func(cmd []string, conn net.Conn) (string, bool) { return pingResponse(true), false },

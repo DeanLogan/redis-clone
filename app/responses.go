@@ -512,3 +512,13 @@ func zaddResponse(cmd []string) string {
 
     return encodeInt(len(sortedSet.Entries) - setLenBeforeAdds)
 }
+
+func zrankResponse(cmd []string) string {
+    key := cmd[1]
+    member := cmd[2]
+    _, index, found := getSortedSetMemberWithIndex(key, member)
+    if !found {
+        return NullBulkString
+    }
+    return encodeInt(index)
+}

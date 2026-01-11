@@ -69,14 +69,7 @@ func addStreamEntry(key, id string, fields map[string]string) {
 }
 
 func getOrCreateSortedSet(key string) SortedSet {
-    sortedSetVal, ok := store[key]
-    if !ok {
-        return SortedSet{
-            Entries: make(map[string]float64),
-            Sorted:  []SortedSetEntry{},
-        }
-    }
-    sortedSet, ok := sortedSetVal.value.(SortedSet)
+    sortedSet, ok := getSortedSet(key)
     if !ok {
         return SortedSet{
             Entries: make(map[string]float64),
@@ -84,6 +77,19 @@ func getOrCreateSortedSet(key string) SortedSet {
         }
     }
     return sortedSet
+}
+
+func getSortedSetMemberWithIndex(key, member string) (float64, int, bool) {
+    sortedSet, ok := getSortedSet(key)
+    if !ok {
+        return 0, -1, false
+    }
+    for i, entry := range sortedSet.Sorted {
+        if entry.Member == member {
+            return entry.Score, i, true
+        }
+    }
+    return 0, -1, false
 }
 
 func updateSortedSetMember(sortedSet *SortedSet, value SortedSetEntry) {
@@ -102,6 +108,9 @@ func updateSortedSetMember(sortedSet *SortedSet, value SortedSetEntry) {
 
 func sortSortedSet(sortedSet *SortedSet) {
     sort.Slice(sortedSet.Sorted, func(i, j int) bool {
+        if sortedSet.Sorted[i].Score == sortedSet.Sorted[j].Score {
+            return sortedSet.Sorted[i].Member < sortedSet.Sorted[j].Member
+        }
         return sortedSet.Sorted[i].Score < sortedSet.Sorted[j].Score
     })
 }
@@ -221,6 +230,15 @@ func getSet(key string) ([]string, bool) {
         set = append(set, k)
     }
     return set, true
+}
+
+func getSortedSet(key string) (SortedSet, bool) {
+    val, ok := store[key]
+    if !ok {
+        return SortedSet{}, false
+    }
+    sortedSet, ok := val.value.(SortedSet)
+    return sortedSet, ok
 }
 
 func getStream(key string) (RedisStream, bool) {
