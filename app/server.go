@@ -79,6 +79,7 @@ func init() {
         "UNSUBSCRIBE":  func(cmd []string, conn net.Conn) (string, bool) { return unsubscribeResponse(cmd, conn), false },
         "ZADD":         func(cmd []string, conn net.Conn) (string, bool) { return zaddResponse(cmd), false },
         "ZRANK":        func(cmd []string, conn net.Conn) (string, bool) { return zrankResponse(cmd), false },
+        "ZRANGE":       func(cmd []string, conn net.Conn) (string, bool) { return zrangeResponse(cmd), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){

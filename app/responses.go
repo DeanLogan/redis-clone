@@ -522,3 +522,24 @@ func zrankResponse(cmd []string) string {
     }
     return encodeInt(index)
 }
+
+func zrangeResponse(cmd []string) string {
+    key := cmd[1]
+    sortedSet, ok := getSortedSet(key)
+
+    if !ok {
+        return encodeStringArray([]string{})
+    }
+    arr := sortedSet.Sorted
+    arrLen := len(arr)-1
+    startIndx, stopIndx, valid := parseRangeIndices(cmd, arrLen)
+    if !valid {
+        return encodeStringArray([]string{})
+    }
+    setArr := arr[startIndx:stopIndx+1]
+    memberArr := make([]string, len(setArr))
+    for i, set := range setArr {
+        memberArr[i] = set.Member
+    }
+    return encodeStringArray(memberArr)
+}
