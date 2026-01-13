@@ -543,3 +543,9 @@ func zrangeResponse(cmd []string) string {
     }
     return encodeStringArray(memberArr)
 }
+
+func zcardResponse(cmd []string) string {
+    key := cmd[1]
+    sortedSet, _ := getSortedSet(key)
+    return encodeInt(len(sortedSet.Entries))
+}
