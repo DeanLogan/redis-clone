@@ -81,6 +81,7 @@ func init() {
         "ZRANK":        func(cmd []string, conn net.Conn) (string, bool) { return zrankResponse(cmd), false },
         "ZRANGE":       func(cmd []string, conn net.Conn) (string, bool) { return zrangeResponse(cmd), false },
         "ZCARD":        func(cmd []string, conn net.Conn) (string, bool) { return zcardResponse(cmd), false },
+        "ZSCORE":       func(cmd []string, conn net.Conn) (string, bool) { return zscoreResponse(cmd), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){

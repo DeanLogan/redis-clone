@@ -549,3 +549,20 @@ func zcardResponse(cmd []string) string {
     sortedSet, _ := getSortedSet(key)
     return encodeInt(len(sortedSet.Entries))
 }
+
+func zscoreResponse(cmd []string) string {
+    key := cmd[1]
+    memberKey := cmd[2]
+
+    sortedSet, ok := getSortedSet(key)
+    if !ok {
+        return NullBulkString
+    }
+    memberScore, ok := sortedSet.Entries[memberKey]
+    if !ok {
+        return NullBulkString
+    }
+
+    memberScoreStr := strconv.FormatFloat(memberScore, 'f', -1, 64)
+    return encodeBulkString(memberScoreStr)
+}
