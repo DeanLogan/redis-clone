@@ -123,6 +123,42 @@ func addToSortedSet(key string, value SortedSetEntry) SortedSet {
     return sortedSet
 }
 
+func getSortedSet(key string) (SortedSet, bool) {
+    val, ok := store[key]
+    if !ok {
+        return SortedSet{}, false
+    }
+    sortedSet, ok := val.value.(SortedSet)
+    return sortedSet, ok
+}
+
+func removeFromSortedSet(key string, member string) (SortedSet, *SortedSetEntry) {
+    sortedSet, ok := getSortedSet(key)
+    if !ok {
+        return sortedSet, nil
+    }
+    
+    _, exists := sortedSet.Entries[member]
+    if !exists {
+        return sortedSet, nil
+    }
+    
+    delete(sortedSet.Entries, member)
+    
+    // Remove from sorted slice and get the entry
+    var removedEntry *SortedSetEntry
+    for i, entry := range sortedSet.Sorted {
+        if entry.Member == member {
+            removedEntry = &sortedSet.Sorted[i]
+            sortedSet.Sorted = append(sortedSet.Sorted[:i], sortedSet.Sorted[i+1:]...)
+            break
+        }
+    }
+    
+    store[key] = RedisValue{value: sortedSet}
+    return sortedSet, removedEntry
+}
+
 func setGenericValue[T any](key string, value T) {
     store[key] = RedisValue{value: value}
 }
@@ -230,15 +266,6 @@ func getSet(key string) ([]string, bool) {
         set = append(set, k)
     }
     return set, true
-}
-
-func getSortedSet(key string) (SortedSet, bool) {
-    val, ok := store[key]
-    if !ok {
-        return SortedSet{}, false
-    }
-    sortedSet, ok := val.value.(SortedSet)
-    return sortedSet, ok
 }
 
 func getStream(key string) (RedisStream, bool) {

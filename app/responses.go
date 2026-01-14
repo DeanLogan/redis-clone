@@ -566,3 +566,17 @@ func zscoreResponse(cmd []string) string {
     memberScoreStr := strconv.FormatFloat(memberScore, 'f', -1, 64)
     return encodeBulkString(memberScoreStr)
 }
+
+func zremResponse(cmd []string) string {
+    key := cmd[1]
+
+    removedCount := 0
+    for _, member := range cmd[2:] {
+        _, removedVal := removeFromSortedSet(key, member)
+        if removedVal != nil {
+            removedCount++
+        }
+    }
+
+    return encodeInt(removedCount)
+}
