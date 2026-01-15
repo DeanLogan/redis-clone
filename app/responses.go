@@ -580,3 +580,34 @@ func zremResponse(cmd []string) string {
 
     return encodeInt(removedCount)
 }
+
+func geoaddResponse(cmd []string) string {
+    key := cmd[1]
+
+    sortedSet := getOrCreateSortedSet(key)
+    setLenBeforeAdds := len(sortedSet.Entries)
+
+    if (len(cmd)-2)%3 != 0 {
+        return encodeSimpleErrorResponse("GEOADD requires longitude, latitude, member triples")
+    }
+
+    for i := 2; i < len(cmd)-2; i += 3 {
+        longStr := cmd[i]
+        latStr := cmd[i+1]
+        member := cmd[i+2]
+
+        long, lat, err := parseGeoCoords(longStr, latStr)
+        if err != nil {
+            return encodeSimpleErrorResponse(err.Error())
+        }
+
+        score := encodeGeoHash(long, lat)
+        setEntry := SortedSetEntry{
+            Member: member,
+            Score:  score,
+        }
+        sortedSet = addToSortedSet(key, setEntry)
+    }
+
+    return encodeInt(len(sortedSet.Entries) - setLenBeforeAdds)
+}

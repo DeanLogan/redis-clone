@@ -314,3 +314,15 @@ func subscriberCount(conn net.Conn) int {
     }
     return count
 }
+
+func parseGeoCoords(longStr, latStr string) (float64, float64, error) {
+    long, err := strconv.ParseFloat(longStr, 64)
+    if err != nil {
+        return 0, 0, fmt.Errorf("longitude value is not a float")
+    }
+    lat, err := strconv.ParseFloat(latStr, 64)
+    if err != nil {
+        return 0, 0, fmt.Errorf("latitude value is not a float")
+    }
+    return long, lat, nil
+}

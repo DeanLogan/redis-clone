@@ -144,7 +144,7 @@ func removeFromSortedSet(key string, member string) (SortedSet, *SortedSetEntry)
     }
     
     delete(sortedSet.Entries, member)
-    
+
     // Remove from sorted slice and get the entry
     var removedEntry *SortedSetEntry
     for i, entry := range sortedSet.Sorted {
@@ -275,4 +275,16 @@ func getStream(key string) (RedisStream, bool) {
     }
     streamVal, ok := val.value.(RedisStream)
     return streamVal, ok
+}
+
+const geoHashFactor = 1e6
+
+func encodeGeoHash(longitude, latitude float64) float64 {
+    return latitude*geoHashFactor + longitude
+}
+
+func decodeGeoHash(hash float64) (longitude, latitude float64) {
+    latitude = float64(int(hash / geoHashFactor))
+    longitude = hash - latitude*geoHashFactor
+    return longitude, latitude
 }
