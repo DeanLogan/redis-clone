@@ -277,14 +277,93 @@ func getStream(key string) (RedisStream, bool) {
     return streamVal, ok
 }
 
-const geoHashFactor = 1e6
+// geo hashing
 
-func encodeGeoHash(longitude, latitude float64) float64 {
-    return latitude*geoHashFactor + longitude
+const (
+	geoLonMin = -180.0
+	geoLonMax = 180.0
+	geoLatMin = -85.05112878
+	geoLatMax = 85.05112878
+	geoStep   = 26 // bits per coordinate
+)
+
+func encodeGeoHash(lon, lat float64) float64 {
+	lonBits := coordToBits(lon, geoLonMin, geoLonMax, geoStep)
+	latBits := coordToBits(lat, geoLatMin, geoLatMax, geoStep)
+	inter := interleaveBits(lonBits, latBits)
+	return float64(inter)
 }
 
-func decodeGeoHash(hash float64) (longitude, latitude float64) {
-    latitude = float64(int(hash / geoHashFactor))
-    longitude = hash - latitude*geoHashFactor
-    return longitude, latitude
+func coordToBits(val, min, max float64, step uint) uint64 {
+	if val < min {
+		val = min
+	}
+	if val > max {
+		val = max
+	}
+	var bits uint64 = 0
+	for i := uint(0); i < step; i++ {
+		mid := (min + max) / 2
+		bits <<= 1
+		if val >= mid {
+			bits |= 1
+			min = mid
+		} else {
+			max = mid
+		}
+	}
+	return bits
+}
+
+func interleaveBits(x, y uint64) uint64 {
+	// expand to interleaved form
+	x = (x | (x << 16)) & 0x0000FFFF0000FFFF
+	x = (x | (x << 8)) & 0x00FF00FF00FF00FF
+	x = (x | (x << 4)) & 0x0F0F0F0F0F0F0F0F
+	x = (x | (x << 2)) & 0x3333333333333333
+	x = (x | (x << 1)) & 0x5555555555555555
+	y = (y | (y << 16)) & 0x0000FFFF0000FFFF
+	y = (y | (y << 8)) & 0x00FF00FF00FF00FF
+	y = (y | (y << 4)) & 0x0F0F0F0F0F0F0F0F
+	y = (y | (y << 2)) & 0x3333333333333333
+	y = (y | (y << 1)) & 0x5555555555555555
+	return (x << 1) | y
+}
+
+func decodeGeoHash(hash float64) (lon, lat float64) {
+    inter := uint64(hash)
+    lonBits, latBits := deinterleaveBits(inter)
+    lon = bitsToCoord(lonBits, geoLonMin, geoLonMax, geoStep)
+    lat = bitsToCoord(latBits, geoLatMin, geoLatMax, geoStep)
+    return lon, lat
+}
+
+func deinterleaveBits(inter uint64) (x, y uint64) {
+    x = inter >> 1
+    y = inter
+    x = compactBits(x)
+    y = compactBits(y)
+    return x, y
+}
+
+func compactBits(n uint64) uint64 {
+    n = n & 0x5555555555555555
+    n = (n | (n >> 1)) & 0x3333333333333333
+    n = (n | (n >> 2)) & 0x0F0F0F0F0F0F0F0F
+    n = (n | (n >> 4)) & 0x00FF00FF00FF00FF
+    n = (n | (n >> 8)) & 0x0000FFFF0000FFFF
+    n = (n | (n >> 16)) & 0x00000000FFFFFFFF
+    return n
+}
+
+func bitsToCoord(bits uint64, min, max float64, step uint) float64 {
+    for i := uint(0); i < step; i++ {
+        mid := (min + max) / 2
+        if ((bits >> (step - i - 1)) & 1) == 1 {
+            min = mid
+        } else {
+            max = mid
+        }
+    }
+    return (min + max) / 2
 }

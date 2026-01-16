@@ -600,8 +600,8 @@ func geoaddResponse(cmd []string) string {
         if err != nil {
             return encodeSimpleErrorResponse(err.Error())
         }
-
         score := encodeGeoHash(long, lat)
+
         setEntry := SortedSetEntry{
             Member: member,
             Score:  score,
@@ -610,4 +610,15 @@ func geoaddResponse(cmd []string) string {
     }
 
     return encodeInt(len(sortedSet.Entries) - setLenBeforeAdds)
+}
+
+func geoposResponse(cmd []string) string {
+    key := cmd[1]
+    sortedSet, ok := getSortedSet(key)
+    var result []string
+
+    for _, location := range cmd[2:] {
+        result = append(result, encodeGeoPositionResp(sortedSet, ok, location))
+    }
+    return wrapRespFragmentsAsArray(result)
 }

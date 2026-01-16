@@ -84,6 +84,7 @@ func init() {
         "ZSCORE":       func(cmd []string, conn net.Conn) (string, bool) { return zscoreResponse(cmd), false },
         "ZREM":         func(cmd []string, conn net.Conn) (string, bool) { return zremResponse(cmd), false },
         "GEOADD":       func(cmd []string, conn net.Conn) (string, bool) { return geoaddResponse(cmd), false },
+        "GEOPOS":       func(cmd []string, conn net.Conn) (string, bool) { return geoposResponse(cmd), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){

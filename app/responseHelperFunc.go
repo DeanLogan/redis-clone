@@ -330,3 +330,25 @@ func parseGeoCoords(longStr, latStr string) (float64, float64, error) {
     }
     return long, lat, nil
 }
+
+func geoCoordsToStrings(long, lat float64) (string, string) {
+    longStr := strconv.FormatFloat(long, 'f', -1, 64)
+    latStr := strconv.FormatFloat(lat, 'f', -1, 64)
+    return longStr, latStr
+}
+
+func encodeGeoPositionResp(sortedSet SortedSet, setOk bool, location string) string {
+    if !setOk {
+        return "*-1\r\n"
+    }
+    encodedHashVal, ok := sortedSet.Entries[location]
+    if !ok {
+        return "*-1\r\n"
+    }
+    lon, lat := decodeGeoHash(encodedHashVal)
+    longStr, latStr := geoCoordsToStrings(lon, lat)
+    return wrapRespFragmentsAsArray([]string{
+        encodeBulkString(longStr),
+        encodeBulkString(latStr),
+    })
+}
