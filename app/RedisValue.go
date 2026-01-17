@@ -330,40 +330,52 @@ func interleaveBits(x, y uint64) uint64 {
 	return (x << 1) | y
 }
 
+
 func decodeGeoHash(hash float64) (lon, lat float64) {
     inter := uint64(hash)
-    lonBits, latBits := deinterleaveBits(inter)
+    latBits, lonBits := deinterleaveBits(inter)
     lon = bitsToCoord(lonBits, geoLonMin, geoLonMax, geoStep)
     lat = bitsToCoord(latBits, geoLatMin, geoLatMax, geoStep)
     return lon, lat
 }
 
-func deinterleaveBits(inter uint64) (x, y uint64) {
-    x = inter >> 1
-    y = inter
-    x = compactBits(x)
-    y = compactBits(y)
-    return x, y
-}
-
-func compactBits(n uint64) uint64 {
-    n = n & 0x5555555555555555
-    n = (n | (n >> 1)) & 0x3333333333333333
-    n = (n | (n >> 2)) & 0x0F0F0F0F0F0F0F0F
-    n = (n | (n >> 4)) & 0x00FF00FF00FF00FF
-    n = (n | (n >> 8)) & 0x0000FFFF0000FFFF
-    n = (n | (n >> 16)) & 0x00000000FFFFFFFF
-    return n
-}
-
-func bitsToCoord(bits uint64, min, max float64, step uint) float64 {
-    for i := uint(0); i < step; i++ {
-        mid := (min + max) / 2
-        if ((bits >> (step - i - 1)) & 1) == 1 {
-            min = mid
-        } else {
-            max = mid
-        }
+func deinterleaveBits(interleaved uint64) (uint64, uint64) {
+    B := [6]uint64{
+        0x5555555555555555, 0x3333333333333333,
+        0x0F0F0F0F0F0F0F0F, 0x00FF00FF00FF00FF,
+        0x0000FFFF0000FFFF, 0x00000000FFFFFFFF,
     }
-    return (min + max) / 2
+    S := [6]uint{0, 1, 2, 4, 8, 16}
+
+    x := interleaved
+    y := interleaved >> 1
+
+    x = (x | (x >> S[0])) & B[0]
+    y = (y | (y >> S[0])) & B[0]
+
+    x = (x | (x >> S[1])) & B[1]
+    y = (y | (y >> S[1])) & B[1]
+
+    x = (x | (x >> S[2])) & B[2]
+    y = (y | (y >> S[2])) & B[2]
+
+    x = (x | (x >> S[3])) & B[3]
+    y = (y | (y >> S[3])) & B[3]
+
+    x = (x | (x >> S[4])) & B[4]
+    y = (y | (y >> S[4])) & B[4]
+
+    x = (x | (x >> S[5])) & B[5]
+    y = (y | (y >> S[5])) & B[5]
+
+    return x, y // x=latitude, y=longitude
+}
+
+// Convert quantized bits back to coordinate using Redis approach
+func bitsToCoord(bits uint64, min, max float64, step uint) float64 {
+    scale := max - min
+    stepSize := float64(uint64(1) << step)
+    coordMin := min + (float64(bits)/stepSize)*scale
+    coordMax := min + (float64(bits+1)/stepSize)*scale
+    return (coordMin + coordMax) / 2
 }
