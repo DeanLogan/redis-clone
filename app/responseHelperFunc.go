@@ -7,6 +7,7 @@ import (
 	"time"
 	"unicode"
     "net"
+    "math"
 )
 
 func checkIfConnIsReplica(conn net.Conn) bool {
@@ -351,4 +352,37 @@ func encodeGeoPositionResp(sortedSet SortedSet, setOk bool, location string) str
         encodeBulkString(longStr),
         encodeBulkString(latStr),
     })
+}
+
+const D_R = math.Pi / 180
+const EARTH_RADIUS_IN_METERS = 6372797.560856;
+
+//Calculate distance using simplified haversine great circle distance formula.
+// Given longitude diff is 0 the asin(sqrt(a)) on the haversine is asin(sin(abs(u))).
+// arcsin(sin(x)) equal to x when x ∈[−𝜋/2,𝜋/2]. Given latitude is between [−𝜋/2,𝜋/2]
+// we can simplify arcsin(sin(x)) to x.
+func geohashGetLatDistance(lat1d, lat2d float64) float64{
+    return EARTH_RADIUS_IN_METERS * math.Abs(deg_rad(lat2d) - deg_rad(lat1d));
+}
+
+func deg_rad(angle float64) float64 {
+    return angle * D_R
+}
+
+// Calculate distance using haversine great circle distance formula. 
+// Taken from actual redis implementation 
+// (https://github.com/redis/redis/blob/4322cebc1764d433b3fce3b3a108252648bf59e7/src/geohash_helper.c#L224)
+func geohashGetDistance(lon1d, lat1d, lon2d, lat2d float64) float64 {
+    lon1r := deg_rad(lon1d)
+    lon2r := deg_rad(lon2d)
+    sin_half_dlon := math.Sin((lon2r - lon1r) / 2);
+    // if v == 0 we can avoid doing expensive math when lons are practically the same
+    if(sin_half_dlon == 0){
+        return geohashGetLatDistance(lat1d, lat2d);
+    }
+    lat1r := deg_rad(lat1d);
+    lat2r := deg_rad(lat2d);
+    sin_half_dlat := math.Sin((lat2r - lat1r) / 2);
+    haversine := sin_half_dlat * sin_half_dlat + math.Cos(lat1r) * math.Cos(lat2r) * sin_half_dlon * sin_half_dlon;
+    return 2.0 * EARTH_RADIUS_IN_METERS * math.Asin(math.Sqrt(haversine));
 }

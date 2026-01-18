@@ -622,3 +622,22 @@ func geoposResponse(cmd []string) string {
     }
     return wrapRespFragmentsAsArray(result)
 }
+
+func geodistResponse(cmd []string) string {
+    key := cmd[1]
+    sortedSet, ok := getSortedSet(key)
+    if !ok {
+        return encodeSimpleErrorResponse("Key is not a member of any set")
+    }
+    location1, location2 := cmd[2], cmd[3]
+    lon1, lat1 := getLonLatForLocationInSet(sortedSet, location1)
+    lon2, lat2 := getLonLatForLocationInSet(sortedSet, location2)
+    distance := geohashGetDistance(lon1, lat1, lon2, lat2)
+    distanceStr := strconv.FormatFloat(distance, 'f', -1, 64)
+    return encodeBulkString(distanceStr)
+}
+
+func getLonLatForLocationInSet(sortedSet SortedSet, location string) (float64, float64) {
+    encodedHashVal := sortedSet.Entries[location]
+    return decodeGeoHash(encodedHashVal)
+}
