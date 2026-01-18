@@ -86,6 +86,7 @@ func init() {
         "GEOADD":       func(cmd []string, conn net.Conn) (string, bool) { return geoaddResponse(cmd), false },
         "GEOPOS":       func(cmd []string, conn net.Conn) (string, bool) { return geoposResponse(cmd), false },
         "GEODIST":      func(cmd []string, conn net.Conn) (string, bool) { return geodistResponse(cmd), false },
+        "GEOSEARCH":    func(cmd []string, conn net.Conn) (string, bool) { return geosearchResponse(cmd), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){

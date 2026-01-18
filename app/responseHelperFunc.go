@@ -354,10 +354,15 @@ func encodeGeoPositionResp(sortedSet SortedSet, setOk bool, location string) str
     })
 }
 
+func getLonLatForLocationInSet(sortedSet SortedSet, location string) (float64, float64) {
+    encodedHashVal := sortedSet.Entries[location]
+    return decodeGeoHash(encodedHashVal)
+}
+
 const D_R = math.Pi / 180
 const EARTH_RADIUS_IN_METERS = 6372797.560856;
 
-//Calculate distance using simplified haversine great circle distance formula.
+// Calculate distance using simplified haversine great circle distance formula.
 // Given longitude diff is 0 the asin(sqrt(a)) on the haversine is asin(sin(abs(u))).
 // arcsin(sin(x)) equal to x when x ∈[−𝜋/2,𝜋/2]. Given latitude is between [−𝜋/2,𝜋/2]
 // we can simplify arcsin(sin(x)) to x.

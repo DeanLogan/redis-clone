@@ -637,7 +637,42 @@ func geodistResponse(cmd []string) string {
     return encodeBulkString(distanceStr)
 }
 
-func getLonLatForLocationInSet(sortedSet SortedSet, location string) (float64, float64) {
-    encodedHashVal := sortedSet.Entries[location]
-    return decodeGeoHash(encodedHashVal)
+func geosearchResponse(cmd []string) string {
+    key := cmd[1]
+    sortedSet, ok := getSortedSet(key)
+    if !ok {
+        return encodeSimpleErrorResponse("Key "+key+" is not a member of any set")
+    }
+    if cmd[2] != "FROMLONLAT" {
+        return encodeSimpleErrorResponse("FROMLONLAT not found")
+    }
+    lonSearchStr, latSearchStr := cmd[3], cmd[4]
+    lonSearch, err := strconv.ParseFloat(lonSearchStr, 64)
+    if err != nil {
+        return encodeSimpleErrorResponse("longitude after FROMLONLAT should be a float value")
+    }
+
+    latSearch, err := strconv.ParseFloat(latSearchStr, 64)
+    if err != nil {
+        return encodeSimpleErrorResponse("latitude after FROMLONLAT should be a float value")
+    }
+
+    if cmd[5] != "BYRADIUS" {
+        return encodeSimpleErrorResponse("BYRADIUS not found")
+    }
+    radiusStr := cmd[6]
+    radius, err := strconv.ParseFloat(radiusStr, 64)
+    if err != nil {
+        return encodeSimpleErrorResponse("radius after BYRADIUS should be a float or int value")
+    }
+
+    var result []string
+    for member, score := range sortedSet.Entries {
+        lon, lat := decodeGeoHash(score)
+        if geohashGetDistance(lon, lat, lonSearch, latSearch) <= radius {
+            result = append(result, member)
+        } 
+    }
+
+    return encodeStringArray(result)
 }
