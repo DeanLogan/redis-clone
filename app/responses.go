@@ -45,7 +45,7 @@ func xaddResponse(cmd []string) string {
     streamKey := cmd[1]
     entryId := cmd[2]
 
-    if len(entryId) == 1 && entryId[0] == '*' {
+    if len(entryId) == 1 && entryId[0] == ARRAY {
         generateMilisecondTime(&entryId)
     } 
 
@@ -454,8 +454,8 @@ func subscribeResponse(cmd []string, conn net.Conn) string {
     channel := cmd[1]
     subscribe(channel, conn)
     response := []RespValue{
-        {Type: '$', Value: "subscribe"},
-        {Type: '$', Value: channel},
+        {Type: BULK, Value: "subscribe"},
+        {Type: BULK, Value: channel},
         {Type: ':', Value: subscriberCount(conn)},
     }
     return encodeRespValueArray(response)
@@ -479,8 +479,8 @@ func unsubscribeResponse(cmd []string, conn net.Conn) string {
     channel := cmd[1]
     unsubscribe(channel, conn)
         response := []RespValue{
-        {Type: '$', Value: "unsubscribe"},
-        {Type: '$', Value: channel},
+        {Type: BULK, Value: "unsubscribe"},
+        {Type: BULK, Value: channel},
         {Type: ':', Value: subscriberCount(conn)},
     }
     return encodeRespValueArray(response)
@@ -679,12 +679,38 @@ func geosearchResponse(cmd []string) string {
 }
 
 func aclResponse(cmd []string, conn net.Conn) string {
-    if cmd[1] == "WHOAMI" {
-        return whoAmI(conn)
+    username := loggedInUsers[conn]
+
+    switch strings.ToUpper(cmd[1]) {
+    case "WHOAMI":
+        return encodeBulkString(username)
+    case "GETUSER":
+        if len(cmd) >= 3 {
+            return getUser(cmd[2])
+        }
+        return encodeSimpleErrorResponse("no user selected")
     }
+
     return encodeSimpleErrorResponse("command not yet supported")
 }
 
-func whoAmI(conn net.Conn) string {
-    return encodeBulkString(loggedInUsers[conn])
+func getUser(username string) string {
+    user, ok := config.Users[username]
+    if !ok {
+        return encodeSimpleErrorResponse("ACL user config not found")
+    }
+
+    flags := user.Flags
+    properties := []RespValue{}
+    for flag, set := range flags {
+        if set {
+            properties = append(properties, RespValue{BULK, flag})
+        }
+    }
+    response := []RespValue{
+        {Type: BULK, Value: "flags"},
+        {Type: ARRAY, Value: properties},
+    }
+    
+    return encodeRespValueArray(response)
 }

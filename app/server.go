@@ -120,7 +120,7 @@ func main() {
     config.Users = map[string]aclUser{
         "default": {
             Flags: map[string]bool{
-                "on": true,
+                "nopass":true,
             },
         },
     }
