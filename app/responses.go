@@ -112,7 +112,8 @@ func replconfResponse(cmd []string, conn net.Conn) string {
 		} 
         if cmd[2] == "*" {
             bytes := int(math.Max(float64(config.ReplOffset), 0))
-            return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(bytes)}) // subtracted 37 as ReplOffset includes the current command which should not be included in the response
+            // subtracted 37 as ReplOffset includes the current command which should not be included in the response
+            return encodeStringArray([]string{"REPLCONF", "ACK", strconv.Itoa(bytes)}) 
         } else {
             return encodeSimpleString("OK")
         }
@@ -675,4 +676,15 @@ func geosearchResponse(cmd []string) string {
     }
 
     return encodeStringArray(result)
+}
+
+func aclResponse(cmd []string, conn net.Conn) string {
+    if cmd[1] == "WHOAMI" {
+        return whoAmI(conn)
+    }
+    return encodeSimpleErrorResponse("command not yet supported")
+}
+
+func whoAmI(conn net.Conn) string {
+    return encodeBulkString(loggedInUsers[conn])
 }
