@@ -71,6 +71,13 @@ func encodeSimpleErrorResponse(s string) string{
 	return fmt.Sprintf("-ERR %s\r\n", s)
 }
 
+func encodeSimpleWrongPassResponse(s string) string{
+	if len(s) == 0 {
+		return "-\r\n"
+	}
+	return fmt.Sprintf("-WRONGPASS %s\r\n", s)
+}
+
 func encodeStreamArray(entries []string) string {
     if len(entries) == 0 {
         return "*-1\r\n" // returns a null array

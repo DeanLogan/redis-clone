@@ -49,9 +49,21 @@ func (user aclUser) setPassword(raw string) {
         raw = raw[1:]
     }
 
-    sum := sha256.Sum256([]byte(raw))
-    passwordHash := hex.EncodeToString(sum[:])
+    passwordHash := generatePasswordHash(raw)
 
     user.Password[passwordHash] = struct{}{}
     delete(user.Flags, "nopass")
+}
+
+func (user aclUser) checkPassword(password string) bool {
+    passwordHash := generatePasswordHash(password)
+    if _, ok := user.Password[passwordHash]; !ok {
+        return false
+    }
+    return true
+}
+
+func generatePasswordHash(password string) string {
+    sum := sha256.Sum256([]byte(password))
+    return hex.EncodeToString(sum[:])
 }

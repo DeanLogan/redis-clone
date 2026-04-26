@@ -89,6 +89,7 @@ func init() {
         "GEODIST":      func(cmd []string, conn net.Conn) (string, bool) { return geodistResponse(cmd), false },
         "GEOSEARCH":    func(cmd []string, conn net.Conn) (string, bool) { return geosearchResponse(cmd), false },
         "ACL":          func(cmd []string, conn net.Conn) (string, bool) { return aclResponse(cmd, conn), false },
+        "AUTH":          func(cmd []string, conn net.Conn) (string, bool) { return authResponse(cmd), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){

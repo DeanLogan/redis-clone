@@ -682,7 +682,6 @@ func aclResponse(cmd []string, conn net.Conn) string {
     username := loggedInUsers[conn]
 
     cmdArg := strings.ToUpper(cmd[1])
-
     if cmdArg == "WHOAMI" {
         return encodeBulkString(username)
     }
@@ -701,4 +700,21 @@ func aclResponse(cmd []string, conn net.Conn) string {
     }
 
     return encodeSimpleErrorResponse("command not yet supported")
+}
+
+func authResponse(cmd []string) string {
+    if len(cmd) != 3 {
+        return encodeSimpleWrongPassResponse("invalid username-password pair or user is disabled.")
+    }
+
+    user, ok := config.Users[cmd[1]]
+    if !ok {
+        return encodeSimpleWrongPassResponse("ACL user config not found")
+    }
+
+    if !user.checkPassword(cmd[2]) {
+        return encodeSimpleWrongPassResponse("invalid username-password pair or user is disabled.")
+    }
+
+    return encodeSimpleString("OK")
 }
