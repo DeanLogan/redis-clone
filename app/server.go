@@ -14,10 +14,6 @@ import (
 	"time"
 )
 
-type aclUser struct {
-    Flags map[string]bool
-}
-
 type serverConfig struct {
 	Port          	 int
 	Role          	 string
@@ -47,7 +43,6 @@ var entryIds = make(map[int]int) // key is milisecondsTime and value is sequence
 var replicaAckOffsets = make(map[net.Conn]int) // key: replica address, value: last acked offset
 var queuedCommands = make(map[net.Conn][][]string)
 var channelSubscribers = make(map[string]map[net.Conn]struct{})
-var loggedInUsers = make(map[net.Conn]string)
 
 var ackReceived chan bool
 var commandHandlers map[string]func([]string, net.Conn) (string, bool)
@@ -117,13 +112,7 @@ func main() {
     handleReplicaConfig()
 	setRole()
 
-    config.Users = map[string]aclUser{
-        "default": {
-            Flags: map[string]bool{
-                "nopass":true,
-            },
-        },
-    }
+    newAclUser("default")
 
 	config.ListeningPort = strconv.Itoa(config.Port)
 	config.MasterReplOffset = 0

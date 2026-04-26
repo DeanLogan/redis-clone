@@ -694,23 +694,10 @@ func aclResponse(cmd []string, conn net.Conn) string {
     return encodeSimpleErrorResponse("command not yet supported")
 }
 
-func getUser(username string) string {
+func getUser(username string) string{
     user, ok := config.Users[username]
     if !ok {
         return encodeSimpleErrorResponse("ACL user config not found")
     }
-
-    flags := user.Flags
-    properties := []RespValue{}
-    for flag, set := range flags {
-        if set {
-            properties = append(properties, RespValue{BULK, flag})
-        }
-    }
-    response := []RespValue{
-        {Type: BULK, Value: "flags"},
-        {Type: ARRAY, Value: properties},
-    }
-    
-    return encodeRespValueArray(response)
+    return encodeRespValueArray(user.toGetUser())
 }
