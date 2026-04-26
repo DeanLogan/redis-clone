@@ -681,23 +681,24 @@ func geosearchResponse(cmd []string) string {
 func aclResponse(cmd []string, conn net.Conn) string {
     username := loggedInUsers[conn]
 
-    switch strings.ToUpper(cmd[1]) {
-    case "WHOAMI":
+    cmdArg := strings.ToUpper(cmd[1])
+
+    if cmdArg == "WHOAMI" {
         return encodeBulkString(username)
-    case "GETUSER":
-        if len(cmd) >= 3 {
-            return getUser(cmd[2])
-        }
-        return encodeSimpleErrorResponse("no user selected")
     }
 
-    return encodeSimpleErrorResponse("command not yet supported")
-}
-
-func getUser(username string) string{
-    user, ok := config.Users[username]
+    user, ok := config.Users[cmd[2]]
     if !ok {
         return encodeSimpleErrorResponse("ACL user config not found")
     }
-    return encodeRespValueArray(user.toGetUser())
+
+    switch cmdArg {
+    case "GETUSER":
+        return encodeRespValueArray(user.toGetUser())
+    case "SETUSER":
+        user.setPassword(cmd[3])
+        return encodeSimpleString("OK")
+    }
+
+    return encodeSimpleErrorResponse("command not yet supported")
 }

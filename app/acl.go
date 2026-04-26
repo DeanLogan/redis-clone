@@ -2,6 +2,8 @@ package main
 
 import (
 	"net"
+	"crypto/sha256"
+	"encoding/hex"
 )
 
 var loggedInUsers = make(map[net.Conn]string)
@@ -25,6 +27,14 @@ func newAclUser(username string) aclUser {
     return user
 }
 
+func mapToSlice(mp map[string]struct{}) []RespValue {
+    properties := []RespValue{}
+    for property := range mp {
+        properties = append(properties, RespValue{BULK, property})
+    }
+	return properties
+}
+
 func (user aclUser) toGetUser() []RespValue {
     return []RespValue{
         {Type: BULK, Value: "flags"},
@@ -34,10 +44,14 @@ func (user aclUser) toGetUser() []RespValue {
     }
 }
 
-func mapToSlice(mp map[string]struct{}) []RespValue {
-    properties := []RespValue{}
-    for property := range mp {
-        properties = append(properties, RespValue{BULK, property})
+func (user aclUser) setPassword(raw string) {
+    if len(raw) > 0 && raw[0] == '>' {
+        raw = raw[1:]
     }
-	return properties
+
+    sum := sha256.Sum256([]byte(raw))
+    passwordHash := hex.EncodeToString(sum[:])
+
+    user.Password[passwordHash] = struct{}{}
+    delete(user.Flags, "nopass")
 }
