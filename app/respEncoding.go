@@ -65,17 +65,14 @@ func encodeStringMap(m map[string]string) string {
 }
 
 func encodeSimpleErrorResponse(s string) string{
-	if len(s) == 0 {
-		return "-\r\n"
-	}
-	return fmt.Sprintf("-ERR %s\r\n", s)
+	return encodeErrorResponseWithMsg("ERR", s)
 }
 
-func encodeSimpleWrongPassResponse(s string) string{
-	if len(s) == 0 {
+func encodeErrorResponseWithMsg(key string, msg string) string{
+	if len(msg) == 0 {
 		return "-\r\n"
 	}
-	return fmt.Sprintf("-WRONGPASS %s\r\n", s)
+	return fmt.Sprintf("-%s %s\r\n", key, msg)
 }
 
 func encodeStreamArray(entries []string) string {

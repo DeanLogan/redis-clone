@@ -89,7 +89,7 @@ func init() {
         "GEODIST":      func(cmd []string, conn net.Conn) (string, bool) { return geodistResponse(cmd), false },
         "GEOSEARCH":    func(cmd []string, conn net.Conn) (string, bool) { return geosearchResponse(cmd), false },
         "ACL":          func(cmd []string, conn net.Conn) (string, bool) { return aclResponse(cmd, conn), false },
-        "AUTH":          func(cmd []string, conn net.Conn) (string, bool) { return authResponse(cmd), false },
+        "AUTH":         func(cmd []string, conn net.Conn) (string, bool) { return authResponse(cmd, conn), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){
@@ -181,7 +181,9 @@ func manageClientConnection(id int, conn net.Conn) {
     defer conn.Close()
     
     defer delete(loggedInUsers, conn)
-    loggedInUsers[conn] = "default"
+    
+    user := config.Users["default"]
+    user.authenticate(conn, "")
     
     fmt.Printf("[#%d] Client connected: %v\n", id, conn.RemoteAddr().String())
     scanner := bufio.NewScanner(conn)

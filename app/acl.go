@@ -9,12 +9,14 @@ import (
 var loggedInUsers = make(map[net.Conn]string)
 
 type aclUser struct {
+    Username string
     Flags    map[string]struct{}
     Password map[string]struct{}
 }
 
 func newAclUser(username string) aclUser {
     user := aclUser{
+        Username: username,
         Flags: map[string]struct{}{
             "nopass": {},
         },
@@ -55,11 +57,15 @@ func (user aclUser) setPassword(raw string) {
     delete(user.Flags, "nopass")
 }
 
-func (user aclUser) checkPassword(password string) bool {
+func (user aclUser) authenticate(conn net.Conn, password string) bool {
     passwordHash := generatePasswordHash(password)
-    if _, ok := user.Password[passwordHash]; !ok {
+    _, passwordCorrect := user.Password[passwordHash]
+    _, nopassSet := user.Flags["nopass"]
+    
+    if !passwordCorrect && !nopassSet {
         return false
     }
+    loggedInUsers[conn] = user.Username
     return true
 }
 
