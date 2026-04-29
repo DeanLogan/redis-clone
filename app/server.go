@@ -32,6 +32,9 @@ type serverConfig struct {
     Users            map[string]aclUser
 }
 
+var watchedKeys = make(map[string]map[net.Conn]struct{})
+var dirtyWatchedConns = make(map[net.Conn]bool)
+
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 var config serverConfig
@@ -90,6 +93,7 @@ func init() {
         "GEOSEARCH":    func(cmd []string, conn net.Conn) (string, bool) { return geosearchResponse(cmd), false },
         "ACL":          func(cmd []string, conn net.Conn) (string, bool) { return aclResponse(cmd, conn), false },
         "AUTH":         func(cmd []string, conn net.Conn) (string, bool) { return authResponse(cmd, conn), false },
+        "WATCH":        func(cmd []string, conn net.Conn) (string, bool) { return watchResponse(cmd, conn), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){
@@ -181,6 +185,7 @@ func manageClientConnection(id int, conn net.Conn) {
     defer conn.Close()
     
     defer delete(loggedInUsers, conn)
+    defer clearWatchedState(conn)
     
     user := config.Users["default"]
     user.authenticate(conn, "")
@@ -275,7 +280,20 @@ func handleCommand(cmd []string, conn net.Conn) (response string, resynch bool) 
         return handler(cmd, conn)
     }
 
-    if isInMulti(conn) && command != "EXEC" && command != "MULTI" && command != "DISCARD" {
+    if isWriteCommand(command) {
+        for i := 1; i < len(cmd); i++ {
+            watchers, ok := watchedKeys[cmd[i]]
+            if !ok {
+                continue
+            }
+
+            for watchedConn := range watchers {
+                dirtyWatchedConns[watchedConn] = true
+            }
+        }
+    }
+
+    if isInMulti(conn) && command != "EXEC" && command != "MULTI" && command != "DISCARD" && command != "WATCH" {
         queuedCommands[conn] = append(queuedCommands[conn], cmd)
         return encodeSimpleString("QUEUED"), false
     }

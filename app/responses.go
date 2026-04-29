@@ -428,16 +428,25 @@ func multiResponse(conn net.Conn) string {
 
 func execResponse(conn net.Conn) string {
     commands, ok := queuedCommands[conn]
+    
     if !ok {
         return encodeSimpleErrorResponse("EXEC without MULTI")
     }
+
+    if dirtyWatchedConns[conn] {
+        delete(queuedCommands, conn)
+        clearWatchedState(conn)
+        return "*-1\r\n"
+    }
+
     var results []string
 
     delete(queuedCommands, conn)
-    for _, cmd := range commands {
+    for _, cmd := range commands {        
         response, _ := handleCommand(cmd, conn)
         results = append(results, response)
     }
+    clearWatchedState(conn)
     return wrapRespFragmentsAsArray(results)
 }
 
@@ -446,6 +455,7 @@ func discardResponse(conn net.Conn) string {
         return encodeSimpleErrorResponse("DISCARD without MULTI")
     }
     delete(queuedCommands, conn)
+    clearWatchedState(conn)
     return encodeSimpleString("OK")
 }
 
@@ -719,4 +729,42 @@ func authResponse(cmd []string, conn net.Conn) string {
     }
 
     return encodeSimpleString("OK")
+}
+
+func watchResponse(cmd []string, conn net.Conn) string {
+    if isInMulti(conn) {
+        return encodeSimpleErrorResponse("WATCH inside MULTI is not allowed");
+    }
+    if len(cmd) <= 1 {
+        return encodeSimpleErrorResponse("key to watch needs to be given")
+    }
+    
+    for i := 1; i < len(cmd); i++ {
+        watchers, ok := watchedKeys[cmd[i]]
+        if !ok {
+            watchers = make(map[net.Conn]struct{})
+        }
+        watchers[conn] = struct{}{}
+        watchedKeys[cmd[i]] = watchers
+    }
+
+    return encodeSimpleString("OK")
+}
+
+func clearWatchedState(conn net.Conn) {
+    delete(dirtyWatchedConns, conn)
+
+    for key, watchers := range watchedKeys {
+        if _, ok := watchers[conn]; !ok {
+            continue
+        }
+
+        delete(watchers, conn)
+        if len(watchers) == 0 {
+            delete(watchedKeys, key)
+            continue
+        }
+
+        watchedKeys[key] = watchers
+    }
 }
