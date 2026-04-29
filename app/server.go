@@ -94,6 +94,7 @@ func init() {
         "ACL":          func(cmd []string, conn net.Conn) (string, bool) { return aclResponse(cmd, conn), false },
         "AUTH":         func(cmd []string, conn net.Conn) (string, bool) { return authResponse(cmd, conn), false },
         "WATCH":        func(cmd []string, conn net.Conn) (string, bool) { return watchResponse(cmd, conn), false },
+        "UNWATCH":      func(cmd []string, conn net.Conn) (string, bool) { return unwatchResponse(conn), false },
     }
 
     subscriberCommandHandlers = map[string]func([]string, net.Conn) (string, bool){
@@ -293,7 +294,7 @@ func handleCommand(cmd []string, conn net.Conn) (response string, resynch bool) 
         }
     }
 
-    if isInMulti(conn) && command != "EXEC" && command != "MULTI" && command != "DISCARD" && command != "WATCH" {
+    if isInMulti(conn) && command != "EXEC" && command != "MULTI" && command != "DISCARD" && command != "WATCH" && command != "UNWATCH" {
         queuedCommands[conn] = append(queuedCommands[conn], cmd)
         return encodeSimpleString("QUEUED"), false
     }

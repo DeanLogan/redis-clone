@@ -751,6 +751,11 @@ func watchResponse(cmd []string, conn net.Conn) string {
     return encodeSimpleString("OK")
 }
 
+func unwatchResponse(conn net.Conn) string {
+    clearWatchedState(conn)
+    return encodeSimpleString("OK")
+}
+
 func clearWatchedState(conn net.Conn) {
     delete(dirtyWatchedConns, conn)
 
