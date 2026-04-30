@@ -26,6 +26,10 @@ type serverConfig struct {
 	MasterReplOffset int
     MasterReplid     string
     Dir              string
+    AppendOnly       string
+    AppendDirName    string
+    AppendFilename   string
+    AppendFSync      string
     Dbfilename       string
     WriteOffset      int
     LastAckedOffset  int
@@ -119,6 +123,21 @@ func main() {
 	setRole()
 
     newAclUser("default")
+
+    if config.Dir == "" {
+        if wd, err := os.Getwd(); err == nil {
+            config.Dir = wd
+        } else if ex, err := os.Executable(); err == nil {
+            config.Dir = filepath.Dir(ex)
+        } else {
+            config.Dir = "."
+        }
+    }
+
+    config.AppendOnly = "no"
+    config.AppendDirName = "appendonlydir"
+    config.AppendFilename = "appendonly.aof"
+    config.AppendFSync = "everysec"
 
 	config.ListeningPort = strconv.Itoa(config.Port)
 	config.MasterReplOffset = 0

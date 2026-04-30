@@ -362,36 +362,54 @@ func configResponse(cmd []string) string {
     if len(cmd) >= 3 {
         switch strings.ToUpper(cmd[1]) {
         case "GET":
-            switch strings.ToLower(cmd[2]) {
-            case "dir":
-                return encodeStringArray([]string{"dir", config.Dir})
-            case "dbfilename":
-                return encodeStringArray([]string{"dbfilename", config.Dbfilename})
-            }
+            return configGetResponse(cmd)
         case "SET":
-            switch strings.ToUpper(cmd[2]) {
-            case "REPL-ROLE":
-                if len(cmd) < 4 {
-                    return errorResponse(fmt.Errorf("invalid config set command, REPL-ROLE requires a value"))
-                }
-                config.Role = cmd[3]
-                return encodeSimpleString("OK") 
-            case "REPL-ID":
-                if len(cmd) < 4 {
-                    return errorResponse(fmt.Errorf("invalid config set command, REPL-ID requires a value"))
-                }
-                config.Replid = cmd[3]
-                return encodeSimpleString("OK")
-            case "REPL-ACK":
-                if len(cmd) < 4 {
-                    return errorResponse(fmt.Errorf("invalid config set command, REPL-ACK requires a value"))
-                }
-                config.ReplOffset, _ = strconv.Atoi(cmd[3])
-                return encodeSimpleString("OK")
-            }
+            return configSetResponse(cmd)
         }
     }
     return errorResponse(fmt.Errorf("invalid config set command, invalid number of arguments"))
+}
+
+func configGetResponse(cmd []string) string {
+    switch strings.ToLower(cmd[2]) {
+    case "dir":
+        return encodeStringArray([]string{"dir", config.Dir})
+    case "dbfilename":
+        return encodeStringArray([]string{"dbfilename", config.Dbfilename})
+    case "appendonly":
+        return encodeStringArray([]string{"appendonly", config.AppendOnly})
+    case "appenddirname":
+        return encodeStringArray([]string{"appenddirname", config.AppendDirName})
+    case "appendfilename":
+        return encodeStringArray([]string{"appendfilename", config.AppendFilename})
+    case "appendfsync":
+        return encodeStringArray([]string{"appendfsync", config.AppendFSync})
+    }
+    return encodeSimpleErrorResponse("selected val does not exists")
+}
+
+func configSetResponse(cmd []string) string {
+    switch strings.ToUpper(cmd[2]) {
+    case "REPL-ROLE":
+        if len(cmd) < 4 {
+            return errorResponse(fmt.Errorf("invalid config set command, REPL-ROLE requires a value"))
+        }
+        config.Role = cmd[3]
+        return encodeSimpleString("OK") 
+    case "REPL-ID":
+        if len(cmd) < 4 {
+            return errorResponse(fmt.Errorf("invalid config set command, REPL-ID requires a value"))
+        }
+        config.Replid = cmd[3]
+        return encodeSimpleString("OK")
+    case "REPL-ACK":
+        if len(cmd) < 4 {
+            return errorResponse(fmt.Errorf("invalid config set command, REPL-ACK requires a value"))
+        }
+        config.ReplOffset, _ = strconv.Atoi(cmd[3])
+        return encodeSimpleString("OK")
+    }
+    return encodeSimpleErrorResponse("selected val does not exists")
 }
 
 func keysResponse(cmd []string) string {
