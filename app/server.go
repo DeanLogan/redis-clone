@@ -31,6 +31,7 @@ type serverConfig struct {
     AppendFilename   string
     AppendFSync      string
     AofIncrFileCount int
+    ManifestDir      string
     Dbfilename       string
     WriteOffset      int
     LastAckedOffset  int
@@ -146,6 +147,8 @@ func main() {
             fmt.Println(err)
             os.Exit(1)
         }
+        
+        createManifestFile(aofDir)
         createEmptyIncFile(aofDir)
     }
 
@@ -316,7 +319,7 @@ func handleCommand(cmd []string, conn net.Conn) (response string, resynch bool) 
             if !ok {
                 continue
             }
-
+            
             for watchedConn := range watchers {
                 dirtyWatchedConns[watchedConn] = true
             }
