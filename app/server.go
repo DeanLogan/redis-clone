@@ -113,31 +113,28 @@ func init() {
 }
 
 func main() {
-	flag.IntVar(&config.Port, "port", 6379, "listen on specified port")
-	flag.StringVar(&config.ReplicaofHost, "replicaof", "", "start server in replica mode of given host and port")
-	flag.StringVar(&config.Dir, "dir", "", "the path to the directory where the RDB file is stored")
-	flag.StringVar(&config.Dbfilename, "dbfilename", "", "the name of the RDB file")
+    defaultDir := ""
+    if wd, err := os.Getwd(); err == nil {
+        defaultDir = wd
+    } else if ex, err := os.Executable(); err == nil {
+        defaultDir = filepath.Dir(ex)
+    } else {
+        defaultDir = "."
+    }
+	flag.IntVar(&config.Port, "port", 6379, "Listen on specified port")
+	flag.StringVar(&config.ReplicaofHost, "replicaof", "", "Start server in replica mode of given host and port")
+	flag.StringVar(&config.Dir, "dir", defaultDir, "The base directory where Redis stores its data files")
+	flag.StringVar(&config.Dbfilename, "dbfilename", "", "	The subdirectory under dir where the RDB file is stored")
+	flag.StringVar(&config.AppendOnly, "appendonly", "no", "Controls whether AOF persistence is enabled or disabled")
+	flag.StringVar(&config.AppendDirName, "appenddirname", "appendonlydir", "The subdirectory under dir where AOF and manifest files are stored")
+	flag.StringVar(&config.AppendFilename, "appendfilename", "appendonly.aof", "The name of the append-only file that records write operations")
+	flag.StringVar(&config.AppendFSync, "appendfsync", "everysec", "How often buffered writes are flushed to the AOF file on disk")
 	flag.Parse()
 
     handleReplicaConfig()
 	setRole()
 
     newAclUser("default")
-
-    if config.Dir == "" {
-        if wd, err := os.Getwd(); err == nil {
-            config.Dir = wd
-        } else if ex, err := os.Executable(); err == nil {
-            config.Dir = filepath.Dir(ex)
-        } else {
-            config.Dir = "."
-        }
-    }
-
-    config.AppendOnly = "no"
-    config.AppendDirName = "appendonlydir"
-    config.AppendFilename = "appendonly.aof"
-    config.AppendFSync = "everysec"
 
 	config.ListeningPort = strconv.Itoa(config.Port)
 	config.MasterReplOffset = 0
