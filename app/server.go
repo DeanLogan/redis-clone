@@ -30,6 +30,7 @@ type serverConfig struct {
     AppendDirName    string
     AppendFilename   string
     AppendFSync      string
+    AofIncrFileCount int
     Dbfilename       string
     WriteOffset      int
     LastAckedOffset  int
@@ -131,10 +132,22 @@ func main() {
 	flag.StringVar(&config.AppendFSync, "appendfsync", "everysec", "How often buffered writes are flushed to the AOF file on disk")
 	flag.Parse()
 
+    fmt.Printf("Dir=%q AppendOnly=%q AppendDirName=%q AofIncrFileCount=%d\n", config.Dir, config.AppendOnly, config.AppendDirName, config.AofIncrFileCount)
+
     handleReplicaConfig()
 	setRole()
 
     newAclUser("default")
+
+    config.AofIncrFileCount = 1
+    if config.AppendOnly == "yes" {
+        aofDir, err := createAofDir()
+        if err != nil {
+            fmt.Println(err)
+            os.Exit(1)
+        }
+        createEmptyIncFile(aofDir)
+    }
 
 	config.ListeningPort = strconv.Itoa(config.Port)
 	config.MasterReplOffset = 0
